@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v1)"
+        required: true
+        default: "v1"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore MegaInstaller.sln
+
+      - name: Run Core tests
+        run: dotnet test tests/MegaInstaller.Core.Tests/MegaInstaller.Core.Tests.csproj -c Release --no-restore
+
+      - name: Publish Windows executable (self-contained, single-file)
+        run: >
+          dotnet publish src/MegaInstaller.App/MegaInstaller.App.csproj
+          -c Release -r win-x64
+          -o publish/win-x64
+
+      - name: Determine release tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Package release assets
+        run: |
+          mkdir -p dist
+          cp README.md publish/win-x64/ 2>/dev/null || true
+          (cd publish/win-x64 && zip -r "../../dist/MegaInstaller-${{ steps.tag.outputs.tag }}-win-x64.zip" .)
+          cp "publish/win-x64/MegaInstaller.exe" "dist/MegaInstaller-${{ steps.tag.outputs.tag }}-win-x64.exe"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.tag.outputs.tag }}" \
+            dist/*.zip dist/*.exe \
+            --title "MegaInstaller ${{ steps.tag.outputs.tag }}" \
+            --generate-notes \
+            --repo "${{ github.repository }}"
