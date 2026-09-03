@@ -12,6 +12,7 @@ namespace MegaInstaller.App.Dialogs;
 public sealed class EditInstallerForm : Form
 {
     private readonly InstallerEntry _entry;
+    private readonly IReadOnlyList<InstanceDefinition> _instances;
 
     private readonly TextBox _nameBox;
     private readonly ComboBox _typeCombo;
@@ -20,24 +21,26 @@ public sealed class EditInstallerForm : Form
     private readonly CheckBox _runAsAdminCheck;
     private readonly NumericUpDown _orderUpDown;
     private readonly TextBox _notesBox;
+    private readonly CheckedListBox _instancesList;
 
-    public EditInstallerForm(InstallerEntry entry)
+    public EditInstallerForm(InstallerEntry entry, IReadOnlyList<InstanceDefinition> instances)
     {
         _entry = entry;
+        _instances = instances;
 
         Text = $"Editar - {entry.Name}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(520, 460);
+        ClientSize = new Size(520, 560);
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(12),
             ColumnCount = 3,
-            RowCount = 9,
+            RowCount = 10,
             AutoSize = false,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
@@ -105,6 +108,26 @@ public sealed class EditInstallerForm : Form
         layout.Controls.Add(_notesBox, 1, row);
         layout.SetColumnSpan(_notesBox, 2);
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Instancias:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top }, 0, row);
+        _instancesList = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true, Height = 90 };
+        if (_instances.Count == 0)
+        {
+            _instancesList.Items.Add("(No hay instancias creadas todavía)");
+            _instancesList.Enabled = false;
+        }
+        else
+        {
+            foreach (var instance in _instances)
+            {
+                var isMember = instance.InstallerIds.Contains(entry.Id);
+                _instancesList.Items.Add(instance.Name, isMember);
+            }
+        }
+        layout.Controls.Add(_instancesList, 1, row);
+        layout.SetColumnSpan(_instancesList, 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
         row++;
 
         var buttonsPanel = new FlowLayoutPanel
@@ -189,5 +212,20 @@ public sealed class EditInstallerForm : Form
         _entry.RunAsAdmin = _runAsAdminCheck.Checked;
         _entry.Order = (int)_orderUpDown.Value;
         _entry.Notes = _notesBox.Text.Trim();
+
+        if (_instances.Count > 0)
+        {
+            // _instancesList items were added in the same order as _instances, one per instance.
+            var memberOfIds = new HashSet<string>();
+            for (var i = 0; i < _instances.Count; i++)
+            {
+                if (_instancesList.GetItemChecked(i))
+                {
+                    memberOfIds.Add(_instances[i].Id);
+                }
+            }
+
+            InstanceService.ApplyMembership(_instances, _entry.Id, memberOfIds);
+        }
     }
 }

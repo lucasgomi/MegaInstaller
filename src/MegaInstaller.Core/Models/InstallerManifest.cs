@@ -11,4 +11,6 @@ public sealed class InstallerManifest
     public int Version { get; set; } = 1;
 
     public List<InstallerEntry> Items { get; set; } = new();
+
+    public List<InstanceDefinition> Instances { get; set; } = new();
 }

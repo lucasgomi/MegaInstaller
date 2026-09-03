@@ -7,12 +7,26 @@ los instala en lote, de forma automática y silenciosa cuando es posible.
 - Añade instaladores **copiándolos a la carpeta**, **desde un archivo** o
   **desde una URL** (con barra de progreso de descarga en tiempo real).
 - Un botón para elegir la carpeta de instaladores.
-- Un botón para instalarlos todos (o solo los seleccionados), con registro
-  de instalación en tiempo real y barra de progreso.
+- Agrupa instaladores en **instancias** ("packs"): un mismo programa puede
+  pertenecer a varias instancias sin duplicar el archivo ni la carpeta.
+- Instala una instancia entera en **modo fácil** (todo, rutas automáticas) o
+  **modo avanzado** (excluye instaladores concretos y/o fuerza una carpeta
+  de instalación distinta para esa ejecución), con registro en tiempo real,
+  barra de progreso e instalación concurrente cuando es seguro hacerlo.
 - Todo lo necesario para configurar cómo se instala cada programa
-  (flags silenciosos, carpeta destino, ejecución como administrador) vive
-  **dentro de la propia aplicación** - no hay que editar nada a mano, aunque
-  el archivo generado es JSON legible por si quieres hacerlo.
+  (flags silenciosos, carpeta destino, ejecución como administrador,
+  pertenencia a instancias) vive **dentro de la propia aplicación** - no hay
+  que editar nada a mano, aunque el archivo generado es JSON legible por si
+  quieres hacerlo.
+
+## Pantallas
+
+- **Inicio**: lo primero que ves. Aquí eliges la carpeta de instaladores y
+  gestionas las instancias (crear, editar, eliminar, instalar).
+- **Editor de programas** (botón "Editor de programas..." desde Inicio): la
+  biblioteca completa de instaladores de esa carpeta - añadir, editar,
+  detectar tipo, quitar, o instalar programas sueltos sin pasar por una
+  instancia.
 
 ## Cómo funciona
 
@@ -45,12 +59,24 @@ Ejemplo de `megainstaller.json`:
       "notes": "",
       "addedUtc": "2026-01-01T12:00:00Z"
     }
+  ],
+  "instances": [
+    {
+      "id": "8a1b2c3d4e...",
+      "name": "Pack básico",
+      "description": "Lo mínimo para un equipo nuevo",
+      "installerIds": ["3f6d9c2a1234..."],
+      "order": 10,
+      "addedUtc": "2026-01-01T12:00:00Z"
+    }
   ]
 }
 ```
 
-Puedes editar este archivo a mano si lo prefieres; MegaInstaller lo vuelve a
-leer la próxima vez que abras esa carpeta.
+Una instancia solo guarda una lista de `installerIds` que apuntan a
+elementos de `items` - añadir el mismo instalador a varias instancias no
+duplica nada. Puedes editar este archivo a mano si lo prefieres;
+MegaInstaller lo vuelve a leer la próxima vez que abras esa carpeta.
 
 ### Detección de tipo de instalador y flags silenciosos
 
@@ -76,11 +102,25 @@ argumentos. Para InstallShield y tipos desconocidos no se inserta nada
 automáticamente porque no existe un flag universal fiable - hay que añadirlo
 a mano si se conoce.
 
-### Instalación en lote
+### Instalación en lote: orden y concurrencia
 
-Los instaladores se ejecutan **secuencialmente** (nunca en paralelo): muchos
-usan mutex globales o el servicio del instalador de Windows y no toleran
-ejecutarse a la vez. Por cada uno se muestra en tiempo real:
+Para instalar lo más rápido posible sin arriesgar el resultado, los
+instaladores se agrupan en "oleadas" según su campo **Orden**:
+
+- Las oleadas se ejecutan **estrictamente en secuencia**: una oleada termina
+  del todo antes de que empiece la siguiente. Si un instalador depende de
+  otro (por ejemplo, un runtime que otra app necesita), dale al primero un
+  Orden menor para garantizar que termina antes.
+- Los instaladores que **comparten el mismo Orden** se consideran
+  independientes entre sí y se instalan **en paralelo** dentro de esa
+  oleada (hasta 4 a la vez). Dar el mismo Orden a varios programas de una
+  instancia es la forma de decirle a MegaInstaller "estos pueden ir a la
+  vez, adelante".
+- Como máximo hay **una** instalación elevada (administrador/UAC) en curso
+  a la vez, aunque comparta oleada con otras no elevadas, para que nunca se
+  amontonen varias ventanas de UAC.
+
+Por cada instalador se muestra en tiempo real:
 
 - Para instaladores **sin** "Ejecutar como administrador": la salida de
   consola del propio instalador, línea a línea.
@@ -89,8 +129,11 @@ ejecutarse a la vez. Por cada uno se muestra en tiempo real:
   proceso lanzado con elevación (UAC), así que ahí no hay salida en directo,
   solo el resultado final.
 
-Hay una casilla "Detener si falla uno" para cortar el lote ante el primer
-fallo, y un botón "Detener" para cancelar una instalación en curso.
+Hay una casilla "Detener si falla uno" para cortar el lote antes de la
+siguiente oleada si algo de la actual falla (la oleada en curso siempre
+termina), y un botón "Detener" para cancelar - los instaladores ya
+lanzados se intentan terminar, pero uno que ignore la señal de cierre
+podría seguir instalando en segundo plano.
 
 ## Compilar desde el código fuente
 

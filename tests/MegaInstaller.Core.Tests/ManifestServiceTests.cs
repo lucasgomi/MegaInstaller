@@ -63,6 +63,32 @@ public class ManifestServiceTests : IDisposable
     }
 
     [Fact]
+    public void SaveThenLoad_RoundTripsInstances()
+    {
+        var manifest = new InstallerManifest
+        {
+            Items = { new InstallerEntry { Id = "a", Name = "App A" } },
+            Instances =
+            {
+                new InstanceDefinition
+                {
+                    Name = "Pack básico",
+                    Description = "Lo esencial",
+                    InstallerIds = { "a" },
+                    Order = 1,
+                }
+            }
+        };
+
+        _sut.Save(_folder, manifest);
+        var loaded = _sut.Load(_folder);
+
+        var instance = Assert.Single(loaded.Instances);
+        Assert.Equal("Pack básico", instance.Name);
+        Assert.Equal(new[] { "a" }, instance.InstallerIds);
+    }
+
+    [Fact]
     public void Save_WritesHumanReadableEnumNames()
     {
         var manifest = new InstallerManifest
