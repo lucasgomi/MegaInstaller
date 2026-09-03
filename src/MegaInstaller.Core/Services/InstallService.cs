@@ -21,19 +21,22 @@ public sealed class InstallProgress
 }
 
 /// <summary>
-/// Runs installers one at a time (sequential by design - most installers
-/// use global mutexes/services and don't tolerate running side by side) and
-/// reports live progress. Elevated installs (RunAsAdmin) go through
-/// ShellExecute with the "runas" verb, which is the only way Windows lets a
-/// non-admin process trigger a UAC prompt - Windows does not allow
-/// redirecting stdout/stderr for a process launched that way, so live
-/// console output is only available for non-elevated installs.
+/// Runs installers in ordered "waves" (see <see cref="InstallScheduler"/>):
+/// a wave fully finishes before the next one starts, but entries sharing
+/// the same Order are considered independent and run concurrently for
+/// speed - bounded, and with at most one elevated (RunAsAdmin) install in
+/// flight at a time so UAC prompts never stack. Elevated installs go
+/// through ShellExecute with the "runas" verb, which is the only way
+/// Windows lets a non-admin process trigger a UAC prompt - Windows does
+/// not allow redirecting stdout/stderr for a process launched that way, so
+/// live console output is only available for non-elevated installs.
 /// </summary>
 public sealed class InstallService
 {
     private const int MsiSuccessRebootRequired = 3010;
     private const int MsiSuccessRebootInitiated = 1641;
     private const int Win32ErrorCancelled = 1223;
+    private const int MaxConcurrentInstalls = 4;
 
     public event EventHandler<InstallLogEventArgs>? Log;
 
@@ -44,28 +47,65 @@ public sealed class InstallService
         IProgress<InstallProgress>? progress,
         CancellationToken cancellationToken)
     {
-        var ordered = entries.OrderBy(e => e.Order).ToList();
+        var waves = InstallScheduler.GroupIntoWaves(entries);
+        var total = waves.Sum(w => w.Count);
         var results = new List<InstallResult>();
+        var completedCounter = new CompletedCounter();
 
-        for (var i = 0; i < ordered.Count; i++)
+        foreach (var wave in waves)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var entry = ordered[i];
-            progress?.Report(new InstallProgress { Completed = i, Total = ordered.Count, Current = entry });
+            using var adminGate = new SemaphoreSlim(1, 1);
+            using var concurrencyGate = new SemaphoreSlim(MaxConcurrentInstalls, MaxConcurrentInstalls);
 
-            var result = await InstallOneAsync(folder, entry, cancellationToken).ConfigureAwait(false);
-            results.Add(result);
+            var waveTasks = wave.Select(entry => RunGatedAsync(
+                folder, entry, entry.RunAsAdmin ? adminGate : concurrencyGate,
+                completedCounter, total, progress, cancellationToken));
 
-            progress?.Report(new InstallProgress { Completed = i + 1, Total = ordered.Count, Current = entry, Result = result });
+            var waveResults = await Task.WhenAll(waveTasks).ConfigureAwait(false);
+            results.AddRange(waveResults);
 
-            if (stopOnError && result.Outcome is InstallOutcome.Failed or InstallOutcome.FileNotFound)
+            if (stopOnError && waveResults.Any(r => r.Outcome is InstallOutcome.Failed or InstallOutcome.FileNotFound))
             {
                 break;
             }
         }
 
         return results;
+    }
+
+    private async Task<InstallResult> RunGatedAsync(
+        string folder,
+        InstallerEntry entry,
+        SemaphoreSlim gate,
+        CompletedCounter completedCounter,
+        int total,
+        IProgress<InstallProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            progress?.Report(new InstallProgress { Completed = completedCounter.Value, Total = total, Current = entry });
+
+            var result = await InstallOneAsync(folder, entry, cancellationToken).ConfigureAwait(false);
+
+            progress?.Report(new InstallProgress { Completed = completedCounter.Increment(), Total = total, Current = entry, Result = result });
+
+            return result;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private sealed class CompletedCounter
+    {
+        private int _value;
+        public int Value => Volatile.Read(ref _value);
+        public int Increment() => Interlocked.Increment(ref _value);
     }
 
     public async Task<InstallResult> InstallOneAsync(string folder, InstallerEntry entry, CancellationToken cancellationToken)
@@ -122,6 +162,7 @@ public sealed class InstallService
         }
         catch (OperationCanceledException)
         {
+            TryKill(process, entry);
             RaiseLog($"[{entry.Name}] Cancelado.");
             return Fail(entry, InstallOutcome.Cancelled, null, "Cancelado por el usuario.");
         }
@@ -152,6 +193,21 @@ public sealed class InstallService
         }
 
         return Fail(entry, InstallOutcome.Failed, exitCode, $"Código de salida {exitCode}.");
+    }
+
+    private void TryKill(Process process, InstallerEntry entry)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
+        {
+            RaiseLog($"[{entry.Name}] No se pudo detener el proceso: {ex.Message}");
+        }
     }
 
     private void RaiseLog(string message) => Log?.Invoke(this, new InstallLogEventArgs(message));
