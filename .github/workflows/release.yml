@@ -4,6 +4,13 @@ on:
   push:
     tags:
       - "v*"
+    # Bootstraps the v1 release from this branch: the session pushing this
+    # code can push commits here but is not permitted to push git tags
+    # directly, so this temporarily doubles as the release trigger. Remove
+    # once v1 is published and rely on tag pushes (or workflow_dispatch)
+    # from here on.
+    branches:
+      - "claude/windows-installer-hub-0xbvip"
   workflow_dispatch:
     inputs:
       tag:
