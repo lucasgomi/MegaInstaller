@@ -4,13 +4,6 @@ on:
   push:
     tags:
       - "v*"
-    # Bootstraps the v1 release from this branch: the session pushing this
-    # code can push commits here but is not permitted to push git tags
-    # directly, so this temporarily doubles as the release trigger. Remove
-    # once v1 is published and rely on tag pushes (or workflow_dispatch)
-    # from here on.
-    branches:
-      - "claude/windows-installer-hub-0xbvip"
   workflow_dispatch:
     inputs:
       tag:
@@ -48,13 +41,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "tag=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.ref_type }}" = "tag" ]; then
-            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           else
-            # Branch-push bootstrap trigger: github.ref_name would be the
-            # branch name here, which can contain "/" and breaks file
-            # paths below, so fall back to a fixed tag instead.
-            echo "tag=v1" >> "$GITHUB_OUTPUT"
+            echo "tag=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Package release assets
@@ -71,5 +59,6 @@ jobs:
           gh release create "${{ steps.tag.outputs.tag }}" \
             dist/*.zip dist/*.exe \
             --title "MegaInstaller ${{ steps.tag.outputs.tag }}" \
+            --target "${{ github.sha }}" \
             --generate-notes \
             --repo "${{ github.repository }}"
