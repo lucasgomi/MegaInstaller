@@ -1,0 +1,193 @@
+using MegaInstaller.Core.Models;
+using MegaInstaller.Core.Services;
+
+namespace MegaInstaller.App.Dialogs;
+
+/// <summary>
+/// Lets the user configure exactly how one installer runs: custom silent
+/// flags, a target install directory, elevation, and install order. This is
+/// the "everything needed from inside the app" piece - editing here writes
+/// straight back into the entry that gets saved to megainstaller.json.
+/// </summary>
+public sealed class EditInstallerForm : Form
+{
+    private readonly InstallerEntry _entry;
+
+    private readonly TextBox _nameBox;
+    private readonly ComboBox _typeCombo;
+    private readonly TextBox _argumentsBox;
+    private readonly TextBox _installDirBox;
+    private readonly CheckBox _runAsAdminCheck;
+    private readonly NumericUpDown _orderUpDown;
+    private readonly TextBox _notesBox;
+
+    public EditInstallerForm(InstallerEntry entry)
+    {
+        _entry = entry;
+
+        Text = $"Editar - {entry.Name}";
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = false;
+        MinimizeBox = false;
+        StartPosition = FormStartPosition.CenterParent;
+        ClientSize = new Size(520, 460);
+
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(12),
+            ColumnCount = 3,
+            RowCount = 9,
+            AutoSize = false,
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        Controls.Add(layout);
+
+        var row = 0;
+
+        layout.Controls.Add(new Label { Text = "Archivo:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+        var fileLabel = new Label { Text = entry.FileName, AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = SystemColors.GrayText };
+        layout.Controls.Add(fileLabel, 1, row);
+        layout.SetColumnSpan(fileLabel, 2);
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Nombre:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+        _nameBox = new TextBox { Dock = DockStyle.Fill, Text = entry.Name };
+        layout.Controls.Add(_nameBox, 1, row);
+        layout.SetColumnSpan(_nameBox, 2);
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Tipo:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+        _typeCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+        _typeCombo.Items.AddRange(Enum.GetNames<InstallerType>());
+        _typeCombo.SelectedItem = entry.Type.ToString();
+        layout.Controls.Add(_typeCombo, 1, row);
+        var suggestButton = new Button { Text = "Sugerir flags", Dock = DockStyle.Fill };
+        suggestButton.Click += OnSuggestArguments;
+        layout.Controls.Add(suggestButton, 2, row);
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Argumentos:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+        _argumentsBox = new TextBox { Dock = DockStyle.Fill, Text = entry.Arguments };
+        layout.Controls.Add(_argumentsBox, 1, row);
+        layout.SetColumnSpan(_argumentsBox, 2);
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Carpeta destino:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+        _installDirBox = new TextBox { Dock = DockStyle.Fill, Text = entry.TargetInstallDir };
+        layout.Controls.Add(_installDirBox, 1, row);
+        var browseDirButton = new Button { Text = "...", Dock = DockStyle.Fill };
+        browseDirButton.Click += OnBrowseInstallDir;
+        layout.Controls.Add(browseDirButton, 2, row);
+        row++;
+
+        layout.Controls.Add(new Label(), 0, row);
+        var insertDirButton = new Button { Text = "Insertar carpeta en argumentos", AutoSize = true, Dock = DockStyle.Fill };
+        insertDirButton.Click += OnInsertInstallDir;
+        layout.Controls.Add(insertDirButton, 1, row);
+        layout.SetColumnSpan(insertDirButton, 2);
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Orden:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+        _orderUpDown = new NumericUpDown { Minimum = 0, Maximum = 9999, Value = Math.Clamp(entry.Order, 0, 9999), Width = 80 };
+        _runAsAdminCheck = new CheckBox { Text = "Ejecutar como administrador (pedirá UAC)", AutoSize = true, Checked = entry.RunAsAdmin, Anchor = AnchorStyles.Left };
+        var orderAndAdminPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoSize = true };
+        orderAndAdminPanel.Controls.Add(_orderUpDown);
+        orderAndAdminPanel.Controls.Add(_runAsAdminCheck);
+        layout.Controls.Add(orderAndAdminPanel, 1, row);
+        layout.SetColumnSpan(orderAndAdminPanel, 2);
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Notas:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+        _notesBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, Height = 70, Text = entry.Notes };
+        layout.Controls.Add(_notesBox, 1, row);
+        layout.SetColumnSpan(_notesBox, 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+        row++;
+
+        var buttonsPanel = new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection = FlowDirection.RightToLeft,
+        };
+        var cancelButton = new Button { Text = "Cancelar", DialogResult = DialogResult.Cancel, AutoSize = true };
+        var okButton = new Button { Text = "Guardar", DialogResult = DialogResult.OK, AutoSize = true };
+        okButton.Click += OnSave;
+        buttonsPanel.Controls.Add(cancelButton);
+        buttonsPanel.Controls.Add(okButton);
+        layout.Controls.Add(buttonsPanel, 0, row);
+        layout.SetColumnSpan(buttonsPanel, 3);
+
+        AcceptButton = okButton;
+        CancelButton = cancelButton;
+    }
+
+    private InstallerType SelectedType =>
+        Enum.TryParse<InstallerType>(_typeCombo.SelectedItem as string, out var type) ? type : InstallerType.Unknown;
+
+    private void OnSuggestArguments(object? sender, EventArgs e)
+    {
+        var suggestion = SilentArgsCatalog.GetSuggestedArguments(SelectedType);
+        if (string.IsNullOrEmpty(suggestion))
+        {
+            MessageBox.Show(this,
+                "No hay flags silenciosos conocidos para este tipo. Puedes escribirlos manualmente.",
+                "Sin sugerencia", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        _argumentsBox.Text = suggestion;
+    }
+
+    private void OnBrowseInstallDir(object? sender, EventArgs e)
+    {
+        using var dialog = new FolderBrowserDialog { Description = "Selecciona la carpeta destino de instalación" };
+        if (dialog.ShowDialog(this) == DialogResult.OK)
+        {
+            _installDirBox.Text = dialog.SelectedPath;
+        }
+    }
+
+    private void OnInsertInstallDir(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_installDirBox.Text))
+        {
+            MessageBox.Show(this, "Indica primero una carpeta destino.", "Falta la carpeta",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var type = SelectedType;
+        if (type is InstallerType.Unknown or InstallerType.Custom or InstallerType.InstallShield)
+        {
+            MessageBox.Show(this,
+                "Este tipo de instalador no tiene un flag de carpeta destino fiable y universal. " +
+                "Añade el argumento correcto manualmente si lo conoces.",
+                "No soportado automáticamente", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        _argumentsBox.Text = SilentArgsCatalog.AppendInstallDir(_argumentsBox.Text, type, _installDirBox.Text.Trim());
+    }
+
+    private void OnSave(object? sender, EventArgs e)
+    {
+        if (string.IsNullOrWhiteSpace(_nameBox.Text))
+        {
+            MessageBox.Show(this, "El nombre no puede estar vacío.", "Falta el nombre",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            DialogResult = DialogResult.None;
+            return;
+        }
+
+        _entry.Name = _nameBox.Text.Trim();
+        _entry.Type = SelectedType;
+        _entry.Arguments = _argumentsBox.Text.Trim();
+        _entry.TargetInstallDir = string.IsNullOrWhiteSpace(_installDirBox.Text) ? null : _installDirBox.Text.Trim();
+        _entry.RunAsAdmin = _runAsAdminCheck.Checked;
+        _entry.Order = (int)_orderUpDown.Value;
+        _entry.Notes = _notesBox.Text.Trim();
+    }
+}

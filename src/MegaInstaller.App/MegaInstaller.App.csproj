@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>MegaInstaller</AssemblyName>
+    <RootNamespace>MegaInstaller.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Version>1.0.0</Version>
+
+    <!--
+      Lets `dotnet build`/`publish` target net8.0-windows (WinForms) from a
+      non-Windows SDK. Only affects compiling here; the app still requires
+      Windows to run. See https://aka.ms/dotnet/enablewindowstargeting
+    -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <!--
+    Only applied when a RuntimeIdentifier is given, i.e. `dotnet publish
+    -r win-x64`; a plain `dotnet build` (no RID) is unaffected. Setting
+    SelfContained unconditionally breaks a plain build on non-Windows
+    hosts, since it would then look for a WindowsForms runtime pack for
+    the host's own RID (e.g. linux-x64), which does not exist. Compression
+    shrinks the bundled single-file exe from ~155MB to ~70MB.
+  -->
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' != ''">
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../MegaInstaller.Core/MegaInstaller.Core.csproj" />
+  </ItemGroup>
+
+</Project>
