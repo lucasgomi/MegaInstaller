@@ -17,8 +17,10 @@ public sealed class EditInstanceForm : Form
     private readonly TextBox _descriptionBox;
     private readonly CheckedListBox _installersList;
     private readonly FlowLayoutPanel _iconPicker;
+    private readonly FlowLayoutPanel _colorPicker;
     private readonly ToolTip _toolTip = new();
     private string? _selectedIconKey;
+    private string? _selectedColorHex;
 
     private static Color IconSelectedColor => AppTheme.IsModern ? ModernPalette.AccentSoft : Color.FromArgb(204, 228, 247);
     private static Color IconUnselectedColor => AppTheme.IsModern ? ModernPalette.Surface : SystemColors.Control;
@@ -28,20 +30,21 @@ public sealed class EditInstanceForm : Form
         _instance = instance;
         _allInstallers = allInstallers;
         _selectedIconKey = instance.IconKey;
+        _selectedColorHex = instance.ColorHex;
 
         Text = string.IsNullOrWhiteSpace(instance.Name) ? "Nueva instancia" : $"Editar instancia - {instance.Name}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(460, 610);
+        ClientSize = new Size(460, 666);
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(12),
             ColumnCount = 2,
-            RowCount = 5,
+            RowCount = 6,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -54,6 +57,7 @@ public sealed class EditInstanceForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         Controls.Add(layout);
@@ -70,7 +74,11 @@ public sealed class EditInstanceForm : Form
         _iconPicker = BuildIconPicker();
         layout.Controls.Add(_iconPicker, 1, 2);
 
-        layout.Controls.Add(new Label { Text = "Programas:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top }, 0, 3);
+        layout.Controls.Add(new Label { Text = "Color:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top }, 0, 3);
+        _colorPicker = BuildColorPicker();
+        layout.Controls.Add(_colorPicker, 1, 3);
+
+        layout.Controls.Add(new Label { Text = "Programas:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top }, 0, 4);
         _installersList = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true };
         if (_allInstallers.Count == 0)
         {
@@ -85,7 +93,7 @@ public sealed class EditInstanceForm : Form
                 _installersList.Items.Add($"{installer.Name} ({installer.FileName})", isMember);
             }
         }
-        layout.Controls.Add(_installersList, 1, 3);
+        layout.Controls.Add(_installersList, 1, 4);
 
         var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
         var cancelButton = AppTheme.CreateButton("Cancelar");
@@ -95,7 +103,7 @@ public sealed class EditInstanceForm : Form
         okButton.Click += OnSave;
         buttonsPanel.Controls.Add(cancelButton);
         buttonsPanel.Controls.Add(okButton);
-        layout.Controls.Add(buttonsPanel, 0, 4);
+        layout.Controls.Add(buttonsPanel, 0, 5);
         layout.SetColumnSpan(buttonsPanel, 2);
 
         AcceptButton = okButton;
@@ -151,6 +159,57 @@ public sealed class EditInstanceForm : Form
         }
     }
 
+    private FlowLayoutPanel BuildColorPicker()
+    {
+        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, BorderStyle = BorderStyle.FixedSingle };
+
+        panel.Controls.Add(MakeColorSwatch(null, "Por defecto (color del tema)"));
+        foreach (var hex in InstanceColorPalette.Colors)
+        {
+            panel.Controls.Add(MakeColorSwatch(hex, hex));
+        }
+
+        return panel;
+    }
+
+    private Control MakeColorSwatch(string? hex, string displayName)
+    {
+        var color = hex is null ? (Color?)null : InstanceColorPalette.Resolve(hex, SystemColors.Control);
+        var swatch = new Panel
+        {
+            Width = 34,
+            Height = 34,
+            Margin = new Padding(3),
+            BackColor = color ?? SystemColors.ControlLightLight,
+            Tag = hex,
+            Cursor = Cursors.Hand,
+        };
+        swatch.Paint += (_, e) =>
+        {
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            if (color is null)
+            {
+                using var crossPen = new Pen(SystemColors.GrayText, 1.5f);
+                e.Graphics.DrawLine(crossPen, 7, 7, swatch.Width - 8, swatch.Height - 8);
+                e.Graphics.DrawLine(crossPen, swatch.Width - 8, 7, 7, swatch.Height - 8);
+            }
+
+            var isSelected = hex == _selectedColorHex;
+            using var borderPen = new Pen(isSelected ? SystemColors.WindowText : Color.FromArgb(60, SystemColors.WindowText), isSelected ? 2.5f : 1f);
+            e.Graphics.DrawRectangle(borderPen, 0, 0, swatch.Width - 1, swatch.Height - 1);
+        };
+        _toolTip.SetToolTip(swatch, displayName);
+        swatch.Click += (_, _) =>
+        {
+            _selectedColorHex = hex;
+            foreach (Control sibling in _colorPicker.Controls)
+            {
+                sibling.Invalidate();
+            }
+        };
+        return swatch;
+    }
+
     private void OnSave(object? sender, EventArgs e)
     {
         if (string.IsNullOrWhiteSpace(_nameBox.Text))
@@ -164,6 +223,7 @@ public sealed class EditInstanceForm : Form
         _instance.Name = _nameBox.Text.Trim();
         _instance.Description = _descriptionBox.Text.Trim();
         _instance.IconKey = _selectedIconKey;
+        _instance.ColorHex = _selectedColorHex;
 
         if (_allInstallers.Count > 0)
         {

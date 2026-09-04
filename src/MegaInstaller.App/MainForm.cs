@@ -71,7 +71,12 @@ public sealed class MainForm : Form
             Anchor = AnchorStyles.Left,
             Margin = new Padding(0, 6, 0, 0),
         }, 1, 0);
-        var settingsButton = MakeButton("⚙ Ajustes", OnOpenSettings);
+        var settingsButton = MakeButton("Ajustes", OnOpenSettings);
+        settingsButton.Image = InstanceIconCatalog.Load("gear-fill");
+        settingsButton.TextImageRelation = TextImageRelation.ImageBeforeText;
+        settingsButton.ImageAlign = ContentAlignment.MiddleLeft;
+        settingsButton.TextAlign = ContentAlignment.MiddleRight;
+        settingsButton.Padding = new Padding(6, 0, 6, 0);
         settingsButton.Anchor = AnchorStyles.Right;
         _toolTip.SetToolTip(settingsButton, "Cambiar la carpeta de instaladores y el aspecto de la app");
         headerPanel.Controls.Add(settingsButton, 2, 0);
@@ -166,17 +171,21 @@ public sealed class MainForm : Form
 
     /// <summary>
     /// Shows the folder picker once per Windows logon session (tracked via
-    /// Process.SessionId) rather than on every single launch. Choosing
-    /// "Salir" there closes the whole app instead of leaving Home half set up.
+    /// Process.SessionId) rather than on every single launch - except that a
+    /// missing/invalid folder (deleted, a disconnected drive, ...) always
+    /// forces the picker regardless of the session gate, since there's
+    /// nothing usable to silently fall back to. Choosing "Salir" there
+    /// closes the whole app instead of leaving Home half set up.
     /// </summary>
     private void EnsureFolderForThisSession()
     {
         var settings = _settingsService.Load();
         var currentSessionId = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+        var folderIsValid = !string.IsNullOrWhiteSpace(settings.LastFolder) && Directory.Exists(settings.LastFolder);
 
-        if (settings.LastWindowsSessionId != currentSessionId)
+        if (settings.LastWindowsSessionId != currentSessionId || !folderIsValid)
         {
-            using var startupForm = new SelectFolderStartupForm(settings.LastFolder);
+            using var startupForm = new SelectFolderStartupForm(folderIsValid ? settings.LastFolder : null);
             if (startupForm.ShowDialog(this) != DialogResult.OK || startupForm.SelectedFolder is null)
             {
                 Application.Exit();
@@ -188,10 +197,7 @@ public sealed class MainForm : Form
             _settingsService.Save(settings);
         }
 
-        if (!string.IsNullOrWhiteSpace(settings.LastFolder) && Directory.Exists(settings.LastFolder))
-        {
-            LoadFolder(settings.LastFolder);
-        }
+        LoadFolder(settings.LastFolder!);
     }
 
     private void LoadFolder(string folder)

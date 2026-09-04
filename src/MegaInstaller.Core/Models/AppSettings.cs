@@ -13,5 +13,5 @@ public sealed class AppSettings
     public int? LastWindowsSessionId { get; set; }
 
     /// <summary>Which look the app renders with. Read once at startup, so switching it needs a restart.</summary>
-    public UiThemeMode UiTheme { get; set; } = UiThemeMode.Classic;
+    public UiThemeMode UiTheme { get; set; } = UiThemeMode.Modern;
 }

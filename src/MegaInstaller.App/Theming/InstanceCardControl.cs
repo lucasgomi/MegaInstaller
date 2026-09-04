@@ -7,7 +7,9 @@ namespace MegaInstaller.App.Theming;
 /// One instance "tile" in the Modern home screen's card gallery (used
 /// instead of the classic DataGridView row). A special add-tile instance
 /// (see <see cref="CreateAddTile"/>) has no <see cref="InstanceId"/> and
-/// just invites creating a new one.
+/// just invites creating a new one. Every other card carries its
+/// instance's own accent color (or the theme's default accent, if none was
+/// chosen) through its icon badge, count pill, and selection/hover border.
 /// </summary>
 public sealed class InstanceCardControl : Control
 {
@@ -20,6 +22,7 @@ public sealed class InstanceCardControl : Control
     private readonly string _description;
     private readonly Image? _icon;
     private readonly int _programCount;
+    private readonly Color _accentColor;
     private readonly bool _isAddTile;
 
     private bool _hovered;
@@ -36,13 +39,14 @@ public sealed class InstanceCardControl : Control
         }
     }
 
-    private InstanceCardControl(string? instanceId, string name, string description, Image? icon, int programCount, bool isAddTile)
+    private InstanceCardControl(string? instanceId, string name, string description, Image? icon, int programCount, Color accentColor, bool isAddTile)
     {
         InstanceId = instanceId;
         _name = name;
         _description = description;
         _icon = icon;
         _programCount = programCount;
+        _accentColor = accentColor;
         _isAddTile = isAddTile;
 
         Size = new Size(CardWidth, CardHeight);
@@ -51,11 +55,17 @@ public sealed class InstanceCardControl : Control
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
     }
 
-    public static InstanceCardControl ForInstance(InstanceDefinition instance, int programCount) =>
-        new(instance.Id, instance.Name, instance.Description, InstanceIconCatalog.Load(instance.IconKey), programCount, isAddTile: false);
+    public static InstanceCardControl ForInstance(InstanceDefinition instance, int programCount) => new(
+        instance.Id,
+        instance.Name,
+        instance.Description,
+        InstanceIconCatalog.Load(instance.IconKey),
+        programCount,
+        InstanceColorPalette.Resolve(instance.ColorHex, ModernPalette.Accent),
+        isAddTile: false);
 
     public static InstanceCardControl CreateAddTile() =>
-        new(null, "Nueva instancia", string.Empty, null, 0, isAddTile: true);
+        new(null, "Nueva instancia", string.Empty, null, 0, ModernPalette.Accent, isAddTile: true);
 
     protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
 
@@ -65,10 +75,12 @@ public sealed class InstanceCardControl : Control
     {
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
         var rect = new Rectangle(0, 0, Width - 1, Height - 1);
         using var path = RoundedRect(rect, 12);
 
-        var borderColor = _selected ? ModernPalette.Accent : _hovered ? ModernPalette.AccentSoftBorder : ModernPalette.Border;
+        var borderColor = _selected ? _accentColor : _hovered ? ControlPaint.Light(_accentColor, 0.5f) : ModernPalette.Border;
         var backColor = _isAddTile ? ModernPalette.Background : ModernPalette.Surface;
 
         using (var backBrush = new SolidBrush(backColor))
@@ -95,6 +107,11 @@ public sealed class InstanceCardControl : Control
         const int pad = 14;
         if (_icon is not null)
         {
+            using (var badgeBrush = new SolidBrush(InstanceColorPalette.Tint(_accentColor)))
+            {
+                g.FillEllipse(badgeBrush, pad - 4, pad - 4, 40, 40);
+            }
+
             g.DrawImage(_icon, new Rectangle(pad, pad, 32, 32));
         }
 
@@ -118,12 +135,12 @@ public sealed class InstanceCardControl : Control
         var badgeSize = g.MeasureString(badgeText, badgeFont);
         var badgeRect = new RectangleF(pad, Height - pad - 20, badgeSize.Width + 14, 20);
         using var badgePath = RoundedRect(Rectangle.Round(badgeRect), 10);
-        using (var badgeBrush = new SolidBrush(ModernPalette.AccentSoft))
+        using (var badgeBrush = new SolidBrush(InstanceColorPalette.Tint(_accentColor)))
         {
             g.FillPath(badgeBrush, badgePath);
         }
 
-        using (var badgeTextBrush = new SolidBrush(ModernPalette.Accent))
+        using (var badgeTextBrush = new SolidBrush(_accentColor))
         {
             g.DrawString(badgeText, badgeFont, badgeTextBrush, badgeRect.X + 7, badgeRect.Y + 3);
         }

@@ -28,20 +28,20 @@ public class AppSettingsServiceTests : IDisposable
 
         Assert.Null(settings.LastFolder);
         Assert.Null(settings.LastWindowsSessionId);
-        Assert.Equal(UiThemeMode.Classic, settings.UiTheme);
+        Assert.Equal(UiThemeMode.Modern, settings.UiTheme);
     }
 
     [Fact]
     public void SaveThenLoad_RoundTrips()
     {
         var sut = new AppSettingsService(_path);
-        sut.Save(new AppSettings { LastFolder = @"C:\Installers", LastWindowsSessionId = 7, UiTheme = UiThemeMode.Modern });
+        sut.Save(new AppSettings { LastFolder = @"C:\Installers", LastWindowsSessionId = 7, UiTheme = UiThemeMode.Classic });
 
         var loaded = sut.Load();
 
         Assert.Equal(@"C:\Installers", loaded.LastFolder);
         Assert.Equal(7, loaded.LastWindowsSessionId);
-        Assert.Equal(UiThemeMode.Modern, loaded.UiTheme);
+        Assert.Equal(UiThemeMode.Classic, loaded.UiTheme);
     }
 
     [Fact]
