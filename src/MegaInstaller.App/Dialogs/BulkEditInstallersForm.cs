@@ -34,11 +34,18 @@ public sealed class BulkEditInstallersForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(520, 400);
+        ClientSize = new Size(560, 430);
 
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 2, RowCount = 7 };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+        // Column 0 auto-sizes to whichever checkbox label is longest, instead
+        // of a fixed width that clipped the longer ones; every row gets an
+        // explicit AutoSize style so row heights are never left to guesswork.
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 2, RowCount = 8 };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        for (var i = 0; i < 8; i++)
+        {
+            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        }
         Controls.Add(layout);
 
         var row = 0;
@@ -47,25 +54,26 @@ public sealed class BulkEditInstallersForm : Form
         {
             Text = $"Editando {entries.Count} programa(s). Solo se aplican los campos marcados; el resto se deja como estaba.",
             AutoSize = true,
-            MaximumSize = new Size(460, 0),
+            MaximumSize = new Size(500, 0),
+            Margin = new Padding(3, 3, 3, 12),
         };
         layout.Controls.Add(headerLabel, 0, row);
         layout.SetColumnSpan(headerLabel, 2);
         row++;
 
-        _changeArgumentsCheck = new CheckBox { Text = "Cambiar argumentos a:", AutoSize = true, Anchor = AnchorStyles.Left };
-        _argumentsBox = new TextBox { Dock = DockStyle.Fill, Enabled = false };
+        _changeArgumentsCheck = new CheckBox { Text = "Cambiar argumentos a:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 6) };
+        _argumentsBox = new TextBox { Dock = DockStyle.Fill, Enabled = false, Margin = new Padding(3, 6, 3, 6) };
         _changeArgumentsCheck.CheckedChanged += (_, _) => _argumentsBox.Enabled = _changeArgumentsCheck.Checked;
         layout.Controls.Add(_changeArgumentsCheck, 0, row);
         layout.Controls.Add(_argumentsBox, 1, row);
         row++;
 
-        _changeInstallDirCheck = new CheckBox { Text = "Añadir carpeta destino:", AutoSize = true, Anchor = AnchorStyles.Left };
-        var installDirPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
+        _changeInstallDirCheck = new CheckBox { Text = "Añadir carpeta destino:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 6) };
+        var installDirPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = new Padding(3, 6, 3, 6) };
         installDirPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         installDirPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        _installDirBox = new TextBox { Dock = DockStyle.Fill, Enabled = false };
-        var browseButton = new Button { Text = "...", AutoSize = true, Enabled = false };
+        _installDirBox = new TextBox { Dock = DockStyle.Fill, Enabled = false, Margin = new Padding(0) };
+        var browseButton = new Button { Text = "...", AutoSize = true, Enabled = false, Margin = new Padding(6, 0, 0, 0) };
         browseButton.Click += OnBrowseInstallDir;
         _changeInstallDirCheck.CheckedChanged += (_, _) =>
         {
@@ -78,18 +86,21 @@ public sealed class BulkEditInstallersForm : Form
         layout.Controls.Add(installDirPanel, 1, row);
         row++;
 
+        layout.Controls.Add(new Label(), 0, row);
         layout.Controls.Add(new Label
         {
             Text = "Solo se aplica a los programas MSI, Inno Setup o NSIS de la selección.",
             AutoSize = true,
+            MaximumSize = new Size(380, 0),
             ForeColor = SystemColors.GrayText,
+            Margin = new Padding(3, 0, 3, 6),
         }, 1, row);
         row++;
 
-        _changeAdminCheck = new CheckBox { Text = "Cambiar \"Ejecutar como administrador\":", AutoSize = true, Anchor = AnchorStyles.Left };
-        var adminPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false };
+        _changeAdminCheck = new CheckBox { Text = "Cambiar administrador:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 6) };
+        var adminPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(3, 6, 3, 6) };
         _adminYesRadio = new RadioButton { Text = "Sí", AutoSize = true, Enabled = false };
-        _adminNoRadio = new RadioButton { Text = "No", AutoSize = true, Enabled = false, Checked = true };
+        _adminNoRadio = new RadioButton { Text = "No", AutoSize = true, Enabled = false, Checked = true, Margin = new Padding(12, 0, 3, 0) };
         _changeAdminCheck.CheckedChanged += (_, _) =>
         {
             _adminYesRadio.Enabled = _changeAdminCheck.Checked;
@@ -101,21 +112,21 @@ public sealed class BulkEditInstallersForm : Form
         layout.Controls.Add(adminPanel, 1, row);
         row++;
 
-        _changeOrderCheck = new CheckBox { Text = "Cambiar orden a:", AutoSize = true, Anchor = AnchorStyles.Left };
-        _orderUpDown = new NumericUpDown { Minimum = 0, Maximum = 9999, Width = 80, Enabled = false };
+        _changeOrderCheck = new CheckBox { Text = "Cambiar orden a:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 6) };
+        _orderUpDown = new NumericUpDown { Minimum = 0, Maximum = 9999, Width = 80, Enabled = false, Margin = new Padding(3, 6, 3, 6) };
         _changeOrderCheck.CheckedChanged += (_, _) => _orderUpDown.Enabled = _changeOrderCheck.Checked;
         layout.Controls.Add(_changeOrderCheck, 0, row);
         layout.Controls.Add(_orderUpDown, 1, row);
         row++;
 
-        _addTagsCheck = new CheckBox { Text = "Añadir tags:", AutoSize = true, Anchor = AnchorStyles.Left };
-        _tagsBox = new TextBox { Dock = DockStyle.Fill, Enabled = false, PlaceholderText = "separados por comas" };
+        _addTagsCheck = new CheckBox { Text = "Añadir tags:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 6) };
+        _tagsBox = new TextBox { Dock = DockStyle.Fill, Enabled = false, PlaceholderText = "separados por comas", Margin = new Padding(3, 6, 3, 6) };
         _addTagsCheck.CheckedChanged += (_, _) => _tagsBox.Enabled = _addTagsCheck.Checked;
         layout.Controls.Add(_addTagsCheck, 0, row);
         layout.Controls.Add(_tagsBox, 1, row);
         row++;
 
-        var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
+        var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Margin = new Padding(3, 16, 3, 3) };
         var cancelButton = new Button { Text = "Cancelar", DialogResult = DialogResult.Cancel, AutoSize = true };
         var okButton = new Button { Text = "Aplicar", AutoSize = true };
         okButton.Click += OnApply;

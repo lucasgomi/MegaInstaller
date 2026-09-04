@@ -16,6 +16,13 @@ public static class GridStyle
     public static void ApplyIconColumn(DataGridViewImageColumn column)
     {
         column.DefaultCellStyle.NullValue = BlankIcon;
+        // Binding an Image-typed POCO property by reflection (DataPropertyName)
+        // can leave the cell's inferred ValueType mismatched from what the
+        // property actually returns; being explicit avoids a formatting
+        // exception on every paint, not just null-valued cells.
+        column.ValueType = typeof(Image);
+        column.ReadOnly = true;
+        column.SortMode = DataGridViewColumnSortMode.NotSortable;
     }
 
     public static void Apply(DataGridView grid)
