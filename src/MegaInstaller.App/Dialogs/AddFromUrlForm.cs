@@ -34,7 +34,7 @@ public sealed class AddFromUrlForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(480, 190);
+        ClientSize = new Size(480, 210);
 
         var layout = new TableLayoutPanel
         {
@@ -45,6 +45,13 @@ public sealed class AddFromUrlForm : Form
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        // RowStyles is positional (RowStyles[i] = row i); declare all of
+        // them upfront so none fall back to an unpredictable default.
+        int[] rowHeights = { 32, 32, 28, 28, 40 };
+        foreach (var height in rowHeights)
+        {
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        }
         Controls.Add(layout);
 
         layout.Controls.Add(new Label { Text = "URL:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);

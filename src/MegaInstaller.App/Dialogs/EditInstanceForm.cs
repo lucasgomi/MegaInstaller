@@ -43,6 +43,17 @@ public sealed class EditInstanceForm : Form
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        // RowStyles is a plain positional list - RowStyles[i] governs row i
+        // regardless of when in the code below it's added, so every row's
+        // style must be declared here, upfront, in row order. Adding a
+        // style only after placing that row's controls silently applies it
+        // to an earlier, still-unstyled row instead (which is what made
+        // Nombre/Descripción render with the sizes meant for Icono/Programas).
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         Controls.Add(layout);
 
         layout.Controls.Add(new Label { Text = "Nombre:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
@@ -56,7 +67,6 @@ public sealed class EditInstanceForm : Form
         layout.Controls.Add(new Label { Text = "Icono:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top }, 0, 2);
         _iconPicker = BuildIconPicker();
         layout.Controls.Add(_iconPicker, 1, 2);
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
 
         layout.Controls.Add(new Label { Text = "Programas:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top }, 0, 3);
         _installersList = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true };
@@ -74,7 +84,6 @@ public sealed class EditInstanceForm : Form
             }
         }
         layout.Controls.Add(_installersList, 1, 3);
-        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
         var cancelButton = new Button { Text = "Cancelar", DialogResult = DialogResult.Cancel, AutoSize = true };

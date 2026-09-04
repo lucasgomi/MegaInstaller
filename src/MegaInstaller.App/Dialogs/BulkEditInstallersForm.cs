@@ -34,17 +34,21 @@ public sealed class BulkEditInstallersForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(560, 430);
+        ClientSize = new Size(560, 320);
 
         // Column 0 auto-sizes to whichever checkbox label is longest, instead
-        // of a fixed width that clipped the longer ones; every row gets an
-        // explicit AutoSize style so row heights are never left to guesswork.
+        // of a fixed width that clipped the longer ones. Rows use explicit
+        // Absolute heights rather than AutoSize: an AutoSize row containing a
+        // Dock=Fill child (every row here pairs a checkbox with a Dock=Fill
+        // textbox/panel) has no well-defined preferred height to measure,
+        // which is what made rows render at inconsistent/collapsed heights.
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 2, RowCount = 8 };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        for (var i = 0; i < 8; i++)
+        int[] rowHeights = { 48, 32, 32, 32, 32, 32, 32, 44 };
+        foreach (var height in rowHeights)
         {
-            layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         }
         Controls.Add(layout);
 
