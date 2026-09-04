@@ -1,3 +1,5 @@
+using MegaInstaller.App.Theming;
+
 namespace MegaInstaller.App;
 
 /// <summary>Shared, modern-ish DataGridView look applied consistently across the app's grids.</summary>
@@ -27,6 +29,18 @@ public static class GridStyle
 
     public static void Apply(DataGridView grid)
     {
+        if (AppTheme.IsModern)
+        {
+            ApplyModern(grid);
+        }
+        else
+        {
+            ApplyClassic(grid);
+        }
+    }
+
+    private static void ApplyClassic(DataGridView grid)
+    {
         grid.BackgroundColor = SystemColors.Window;
         grid.BorderStyle = BorderStyle.None;
         grid.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
@@ -53,5 +67,51 @@ public static class GridStyle
         grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(204, 228, 247);
         grid.DefaultCellStyle.SelectionForeColor = Color.Black;
         grid.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(247, 249, 251);
+    }
+
+    private static void ApplyModern(DataGridView grid)
+    {
+        grid.BackgroundColor = ModernPalette.Surface;
+        grid.BorderStyle = BorderStyle.None;
+        grid.CellBorderStyle = DataGridViewCellBorderStyle.None;
+        grid.GridColor = ModernPalette.Surface;
+
+        grid.EnableHeadersVisualStyles = false;
+        grid.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
+        grid.ColumnHeadersHeight = 36;
+        grid.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+        grid.ColumnHeadersDefaultCellStyle.BackColor = ModernPalette.Surface;
+        grid.ColumnHeadersDefaultCellStyle.ForeColor = ModernPalette.TextSecondary;
+        grid.ColumnHeadersDefaultCellStyle.Font = new Font(grid.Font.FontFamily, grid.Font.Size, FontStyle.Bold);
+        grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(8, 0, 0, 0);
+        // Same header-selection pin as Classic (see above) - still needed
+        // here regardless of palette, since it's what stops the header from
+        // ever taking on a data cell's selection color.
+        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = grid.ColumnHeadersDefaultCellStyle.BackColor;
+        grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = grid.ColumnHeadersDefaultCellStyle.ForeColor;
+
+        grid.DefaultCellStyle.BackColor = ModernPalette.Surface;
+        grid.DefaultCellStyle.ForeColor = ModernPalette.TextPrimary;
+        grid.DefaultCellStyle.SelectionBackColor = ModernPalette.AccentSoft;
+        grid.DefaultCellStyle.SelectionForeColor = ModernPalette.TextPrimary;
+        grid.DefaultCellStyle.Padding = new Padding(8, 4, 4, 4);
+        grid.AlternatingRowsDefaultCellStyle.BackColor = ModernPalette.Surface;
+        grid.RowTemplate.Height = Math.Max(grid.RowTemplate.Height, 34);
+
+        // A thin accent line under the whole header row instead of a hard
+        // border - drawing it per-cell keeps it correct as columns resize.
+        grid.CellPainting -= DrawModernHeaderUnderline;
+        grid.CellPainting += DrawModernHeaderUnderline;
+    }
+
+    private static void DrawModernHeaderUnderline(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (e.RowIndex != -1 || e.Graphics is null) return;
+
+        e.Paint(e.CellBounds, DataGridViewPaintParts.All & ~DataGridViewPaintParts.Border);
+        using var pen = new Pen(ModernPalette.Accent, 2);
+        e.Graphics.DrawLine(pen, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Right, e.CellBounds.Bottom - 1);
+        e.Handled = true;
     }
 }

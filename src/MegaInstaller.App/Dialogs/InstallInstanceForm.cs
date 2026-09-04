@@ -1,3 +1,4 @@
+using MegaInstaller.App.Theming;
 using MegaInstaller.Core.Models;
 using MegaInstaller.Core.Services;
 
@@ -81,8 +82,10 @@ public sealed class InstallInstanceForm : Form
         root.Controls.Add(_stopOnErrorCheck, 0, 3);
 
         var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        var cancelButton = new Button { Text = "Cancelar", DialogResult = DialogResult.Cancel, AutoSize = true };
-        _installButton = new Button { Text = "Instalar", AutoSize = true, Enabled = resolvedEntries.Count > 0 };
+        var cancelButton = AppTheme.CreateButton("Cancelar");
+        cancelButton.DialogResult = DialogResult.Cancel;
+        _installButton = AppTheme.CreateButton("Instalar", primary: true);
+        _installButton.Enabled = resolvedEntries.Count > 0;
         _installButton.Click += OnInstallClick;
         buttonsPanel.Controls.Add(cancelButton);
         buttonsPanel.Controls.Add(_installButton);
@@ -90,6 +93,7 @@ public sealed class InstallInstanceForm : Form
 
         CancelButton = cancelButton;
         UpdateModePanels();
+        AppTheme.StyleForm(this);
     }
 
     private Panel BuildEasyPanel()
@@ -125,7 +129,7 @@ public sealed class InstallInstanceForm : Form
         dirPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         dirPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         overrideDirBox = new TextBox { Dock = DockStyle.Fill, PlaceholderText = "Carpeta de instalación personalizada (opcional)" };
-        var browseButton = new Button { Text = "...", AutoSize = true };
+        var browseButton = AppTheme.CreateButton("...");
         var overrideDirBoxRef = overrideDirBox;
         browseButton.Click += (_, _) =>
         {

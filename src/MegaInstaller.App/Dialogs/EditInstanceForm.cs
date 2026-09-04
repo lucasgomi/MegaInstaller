@@ -1,3 +1,4 @@
+using MegaInstaller.App.Theming;
 using MegaInstaller.Core.Models;
 
 namespace MegaInstaller.App.Dialogs;
@@ -19,7 +20,8 @@ public sealed class EditInstanceForm : Form
     private readonly ToolTip _toolTip = new();
     private string? _selectedIconKey;
 
-    private static readonly Color IconSelectedColor = Color.FromArgb(204, 228, 247);
+    private static Color IconSelectedColor => AppTheme.IsModern ? ModernPalette.AccentSoft : Color.FromArgb(204, 228, 247);
+    private static Color IconUnselectedColor => AppTheme.IsModern ? ModernPalette.Surface : SystemColors.Control;
 
     public EditInstanceForm(InstanceDefinition instance, IReadOnlyList<InstallerEntry> allInstallers)
     {
@@ -86,8 +88,10 @@ public sealed class EditInstanceForm : Form
         layout.Controls.Add(_installersList, 1, 3);
 
         var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        var cancelButton = new Button { Text = "Cancelar", DialogResult = DialogResult.Cancel, AutoSize = true };
-        var okButton = new Button { Text = "Guardar", DialogResult = DialogResult.OK, AutoSize = true };
+        var cancelButton = AppTheme.CreateButton("Cancelar");
+        cancelButton.DialogResult = DialogResult.Cancel;
+        var okButton = AppTheme.CreateButton("Guardar", primary: true);
+        okButton.DialogResult = DialogResult.OK;
         okButton.Click += OnSave;
         buttonsPanel.Controls.Add(cancelButton);
         buttonsPanel.Controls.Add(okButton);
@@ -96,6 +100,8 @@ public sealed class EditInstanceForm : Form
 
         AcceptButton = okButton;
         CancelButton = cancelButton;
+
+        AppTheme.StyleForm(this);
     }
 
     private FlowLayoutPanel BuildIconPicker()
@@ -141,7 +147,7 @@ public sealed class EditInstanceForm : Form
         foreach (PictureBox box in panel.Controls)
         {
             var key = box.Tag as string;
-            box.BackColor = key == _selectedIconKey ? IconSelectedColor : SystemColors.Control;
+            box.BackColor = key == _selectedIconKey ? IconSelectedColor : IconUnselectedColor;
         }
     }
 

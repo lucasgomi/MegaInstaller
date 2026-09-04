@@ -1,3 +1,4 @@
+using MegaInstaller.App.Theming;
 using MegaInstaller.Core.Models;
 using MegaInstaller.Core.Services;
 
@@ -77,7 +78,9 @@ public sealed class BulkEditInstallersForm : Form
         installDirPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         installDirPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         _installDirBox = new TextBox { Dock = DockStyle.Fill, Enabled = false, Margin = new Padding(0) };
-        var browseButton = new Button { Text = "...", AutoSize = true, Enabled = false, Margin = new Padding(6, 0, 0, 0) };
+        var browseButton = AppTheme.CreateButton("...");
+        browseButton.Enabled = false;
+        browseButton.Margin = new Padding(6, 0, 0, 0);
         browseButton.Click += OnBrowseInstallDir;
         _changeInstallDirCheck.CheckedChanged += (_, _) =>
         {
@@ -131,8 +134,9 @@ public sealed class BulkEditInstallersForm : Form
         row++;
 
         var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Margin = new Padding(3, 16, 3, 3) };
-        var cancelButton = new Button { Text = "Cancelar", DialogResult = DialogResult.Cancel, AutoSize = true };
-        var okButton = new Button { Text = "Aplicar", AutoSize = true };
+        var cancelButton = AppTheme.CreateButton("Cancelar");
+        cancelButton.DialogResult = DialogResult.Cancel;
+        var okButton = AppTheme.CreateButton("Aplicar", primary: true);
         okButton.Click += OnApply;
         buttonsPanel.Controls.Add(cancelButton);
         buttonsPanel.Controls.Add(okButton);
@@ -141,6 +145,8 @@ public sealed class BulkEditInstallersForm : Form
 
         AcceptButton = okButton;
         CancelButton = cancelButton;
+
+        AppTheme.StyleForm(this);
     }
 
     private void OnBrowseInstallDir(object? sender, EventArgs e)

@@ -1,3 +1,4 @@
+using MegaInstaller.App.Theming;
 using MegaInstaller.Core.Models;
 using MegaInstaller.Core.Services;
 
@@ -78,7 +79,9 @@ public sealed class EditInstallerForm : Form
         _typeCombo.Items.AddRange(Enum.GetNames<InstallerType>());
         _typeCombo.SelectedItem = entry.Type.ToString();
         layout.Controls.Add(_typeCombo, 1, row);
-        var suggestButton = new Button { Text = "Sugerir flags", Dock = DockStyle.Fill };
+        var suggestButton = AppTheme.CreateButton("Sugerir flags");
+        suggestButton.AutoSize = false;
+        suggestButton.Dock = DockStyle.Fill;
         suggestButton.Click += OnSuggestArguments;
         layout.Controls.Add(suggestButton, 2, row);
         row++;
@@ -92,13 +95,16 @@ public sealed class EditInstallerForm : Form
         layout.Controls.Add(new Label { Text = "Carpeta destino:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
         _installDirBox = new TextBox { Dock = DockStyle.Fill, Text = entry.TargetInstallDir };
         layout.Controls.Add(_installDirBox, 1, row);
-        var browseDirButton = new Button { Text = "...", Dock = DockStyle.Fill };
+        var browseDirButton = AppTheme.CreateButton("...");
+        browseDirButton.AutoSize = false;
+        browseDirButton.Dock = DockStyle.Fill;
         browseDirButton.Click += OnBrowseInstallDir;
         layout.Controls.Add(browseDirButton, 2, row);
         row++;
 
         layout.Controls.Add(new Label(), 0, row);
-        var insertDirButton = new Button { Text = "Insertar carpeta en argumentos", AutoSize = true, Dock = DockStyle.Fill };
+        var insertDirButton = AppTheme.CreateButton("Insertar carpeta en argumentos");
+        insertDirButton.Dock = DockStyle.Fill;
         insertDirButton.Click += OnInsertInstallDir;
         layout.Controls.Add(insertDirButton, 1, row);
         layout.SetColumnSpan(insertDirButton, 2);
@@ -150,8 +156,10 @@ public sealed class EditInstallerForm : Form
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.RightToLeft,
         };
-        var cancelButton = new Button { Text = "Cancelar", DialogResult = DialogResult.Cancel, AutoSize = true };
-        var okButton = new Button { Text = "Guardar", DialogResult = DialogResult.OK, AutoSize = true };
+        var cancelButton = AppTheme.CreateButton("Cancelar");
+        cancelButton.DialogResult = DialogResult.Cancel;
+        var okButton = AppTheme.CreateButton("Guardar", primary: true);
+        okButton.DialogResult = DialogResult.OK;
         okButton.Click += OnSave;
         buttonsPanel.Controls.Add(cancelButton);
         buttonsPanel.Controls.Add(okButton);
@@ -160,6 +168,8 @@ public sealed class EditInstallerForm : Form
 
         AcceptButton = okButton;
         CancelButton = cancelButton;
+
+        AppTheme.StyleForm(this);
     }
 
     private InstallerType SelectedType =>
