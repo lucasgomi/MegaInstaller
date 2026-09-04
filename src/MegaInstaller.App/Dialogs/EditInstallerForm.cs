@@ -35,7 +35,7 @@ public sealed class EditInstallerForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(520, 500);
+        ClientSize = new Size(580, 530);
 
         var layout = new TableLayoutPanel
         {
@@ -53,7 +53,9 @@ public sealed class EditInstallerForm : Form
         // style must be declared here, upfront, in row order. Adding a
         // style only after placing that row's controls silently applies it
         // to an earlier, still-unstyled row instead.
-        int[] rowHeights = { 28, 32, 32, 32, 32, 32, 32, 76, 32, 96, 40 };
+        // Rows holding a Dock=Fill button need the button's minimum height
+        // plus its margins, or the button overflows its cell and is clipped.
+        int[] rowHeights = { 28, 34, 38, 34, 38, 38, 34, 76, 34, 90, 46 };
         foreach (var height in rowHeights)
         {
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));

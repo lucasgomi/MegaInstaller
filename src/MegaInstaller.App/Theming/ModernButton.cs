@@ -50,8 +50,12 @@ public sealed class ModernButton : Button
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
 
+        // Inset by half the pen width: a stroke is centred on its path, so
+        // a path along the very edge spills half of itself outside the
+        // control, where it gets clipped and reads as an uneven border.
+        const float borderWidth = 1f;
         var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-        using var path = RoundedRect(rect, 6);
+        using var path = RoundedRect(new RectangleF(borderWidth / 2f, borderWidth / 2f, Width - borderWidth, Height - borderWidth), 6f);
 
         Color fill;
         Color textColor;
@@ -83,24 +87,26 @@ public sealed class ModernButton : Button
 
         if (borderColor is { } bc)
         {
-            using var pen = new Pen(bc);
+            using var pen = new Pen(bc, borderWidth);
             g.DrawPath(pen, path);
         }
 
         if (Focused && Enabled)
         {
             using var focusPen = new Pen(ModernPalette.Accent, 1.5f) { DashStyle = DashStyle.Dot };
-            using var focusPath = RoundedRect(Rectangle.Inflate(rect, -2, -2), 5);
+            using var focusPath = RoundedRect(new RectangleF(3f, 3f, Width - 6f, Height - 6f), 5f);
             g.DrawPath(focusPen, focusPath);
         }
 
         if (Image is not null)
         {
-            const int iconSize = 16;
-            var iconRect = new Rectangle(rect.X + 10, rect.Y + (rect.Height - iconSize) / 2, iconSize, iconSize);
+            // Laid out from the same Padding that AutoSize measured with, so
+            // the drawn content matches the width the button was given.
+            var iconSize = AppTheme.ButtonIconSize;
+            var iconRect = new Rectangle(rect.X + Padding.Left, rect.Y + (rect.Height - iconSize) / 2, iconSize, iconSize);
             g.DrawImage(Image, iconRect);
 
-            var textRect = new Rectangle(iconRect.Right + 6, rect.Y, rect.Width - (iconRect.Right + 6 - rect.X) - 6, rect.Height);
+            var textRect = new Rectangle(iconRect.Right + 6, rect.Y, rect.Width - (iconRect.Right + 6 - rect.X) - Padding.Right, rect.Height);
             TextRenderer.DrawText(g, Text, Font, textRect, textColor,
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
         }
@@ -111,9 +117,9 @@ public sealed class ModernButton : Button
         }
     }
 
-    private static GraphicsPath RoundedRect(Rectangle rect, int radius)
+    private static GraphicsPath RoundedRect(RectangleF rect, float radius)
     {
-        var diameter = Math.Max(1, Math.Min(radius * 2, Math.Min(rect.Width, rect.Height)));
+        var diameter = Math.Max(1f, Math.Min(radius * 2f, Math.Min(rect.Width, rect.Height)));
         var path = new GraphicsPath();
         path.AddArc(rect.X, rect.Y, diameter, diameter, 180, 90);
         path.AddArc(rect.Right - diameter, rect.Y, diameter, diameter, 270, 90);

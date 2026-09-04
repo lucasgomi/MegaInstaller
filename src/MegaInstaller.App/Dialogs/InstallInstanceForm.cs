@@ -34,7 +34,7 @@ public sealed class InstallInstanceForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(520, 500);
+        ClientSize = new Size(560, 520);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 5 };
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));

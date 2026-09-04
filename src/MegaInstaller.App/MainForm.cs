@@ -45,8 +45,10 @@ public sealed class MainForm : Form
         Icon = LoadAppIcon();
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        // Button rows need the button's full footprint (its height plus its
+        // top/bottom margins) or the FlowLayoutPanel clips it at the bottom.
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(root);
 
@@ -75,12 +77,7 @@ public sealed class MainForm : Form
             Anchor = AnchorStyles.Left,
             Margin = new Padding(0, 6, 0, 0),
         }, 1, 0);
-        var settingsButton = MakeButton("Ajustes", OnOpenSettings);
-        settingsButton.Image = InstanceIconCatalog.Load("gear-fill");
-        settingsButton.TextImageRelation = TextImageRelation.ImageBeforeText;
-        settingsButton.ImageAlign = ContentAlignment.MiddleLeft;
-        settingsButton.TextAlign = ContentAlignment.MiddleRight;
-        settingsButton.Padding = new Padding(6, 0, 6, 0);
+        var settingsButton = MakeButton("Ajustes", OnOpenSettings, icon: InstanceIconCatalog.Load("gear-fill"));
         settingsButton.Anchor = AnchorStyles.Right;
         _toolTip.SetToolTip(settingsButton, "Cambiar la carpeta de instaladores y el aspecto de la app");
         headerPanel.Controls.Add(settingsButton, 2, 0);
@@ -123,9 +120,9 @@ public sealed class MainForm : Form
         }
     }
 
-    private static Button MakeButton(string text, EventHandler handler, bool primary = false)
+    private static Button MakeButton(string text, EventHandler handler, bool primary = false, Image? icon = null)
     {
-        var button = AppTheme.CreateButton(text, primary);
+        var button = AppTheme.CreateButton(text, primary, icon);
         button.Click += handler;
         return button;
     }

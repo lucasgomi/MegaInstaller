@@ -39,7 +39,7 @@ public sealed class EditInstanceForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(460, 694);
+        ClientSize = new Size(620, 640);
 
         var layout = new TableLayoutPanel
         {
@@ -59,9 +59,9 @@ public sealed class EditInstanceForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         Controls.Add(layout);
 
         layout.Controls.Add(new Label { Text = "Nombre:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
@@ -308,11 +308,14 @@ public sealed class EditInstanceForm : Form
                 e.Graphics.FillRectangle(brush, 0, 0, swatch.Width, swatch.Height);
             }
 
-            if (!isCustomActive)
+            // The "+" stays on even once a colour has been picked, so this
+            // swatch is still recognisable as the custom one rather than
+            // looking like just another palette colour.
+            var markColor = fill.GetBrightness() < 0.6f ? Color.White : SystemColors.GrayText;
+            using (var pen = new Pen(markColor, 1.8f))
             {
-                using var pen = new Pen(SystemColors.GrayText, 1.5f);
-                e.Graphics.DrawLine(pen, swatch.Width / 2, 8, swatch.Width / 2, swatch.Height - 8);
-                e.Graphics.DrawLine(pen, 8, swatch.Height / 2, swatch.Width - 8, swatch.Height / 2);
+                e.Graphics.DrawLine(pen, swatch.Width / 2, 9, swatch.Width / 2, swatch.Height - 9);
+                e.Graphics.DrawLine(pen, 9, swatch.Height / 2, swatch.Width - 9, swatch.Height / 2);
             }
 
             using var borderPen = new Pen(isCustomActive ? SystemColors.WindowText : Color.FromArgb(60, SystemColors.WindowText), isCustomActive ? 2.5f : 1f);

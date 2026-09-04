@@ -35,7 +35,7 @@ public sealed class BulkEditInstallersForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(560, 320);
+        ClientSize = new Size(620, 366);
 
         // Column 0 auto-sizes to whichever checkbox label is longest, instead
         // of a fixed width that clipped the longer ones. Rows use explicit
@@ -46,7 +46,7 @@ public sealed class BulkEditInstallersForm : Form
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 2, RowCount = 8 };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        int[] rowHeights = { 48, 32, 32, 32, 32, 32, 32, 44 };
+        int[] rowHeights = { 48, 40, 40, 30, 40, 40, 40, 50 };
         foreach (var height in rowHeights)
         {
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
@@ -66,15 +66,15 @@ public sealed class BulkEditInstallersForm : Form
         layout.SetColumnSpan(headerLabel, 2);
         row++;
 
-        _changeArgumentsCheck = new CheckBox { Text = "Cambiar argumentos a:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 6) };
-        _argumentsBox = new TextBox { Dock = DockStyle.Fill, Enabled = false, Margin = new Padding(3, 6, 3, 6) };
+        _changeArgumentsCheck = new CheckBox { Text = "Cambiar argumentos a:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 4, 3, 4) };
+        _argumentsBox = new TextBox { Dock = DockStyle.Fill, Enabled = false, Margin = new Padding(3, 4, 3, 4) };
         _changeArgumentsCheck.CheckedChanged += (_, _) => _argumentsBox.Enabled = _changeArgumentsCheck.Checked;
         layout.Controls.Add(_changeArgumentsCheck, 0, row);
         layout.Controls.Add(_argumentsBox, 1, row);
         row++;
 
-        _changeInstallDirCheck = new CheckBox { Text = "Añadir carpeta destino:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 6) };
-        var installDirPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = new Padding(3, 6, 3, 6) };
+        _changeInstallDirCheck = new CheckBox { Text = "Añadir carpeta destino:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 4, 3, 4) };
+        var installDirPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = new Padding(3, 4, 3, 4) };
         installDirPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         installDirPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         _installDirBox = new TextBox { Dock = DockStyle.Fill, Enabled = false, Margin = new Padding(0) };
@@ -104,8 +104,8 @@ public sealed class BulkEditInstallersForm : Form
         }, 1, row);
         row++;
 
-        _changeAdminCheck = new CheckBox { Text = "Cambiar administrador:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 6) };
-        var adminPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(3, 6, 3, 6) };
+        _changeAdminCheck = new CheckBox { Text = "Cambiar administrador:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 4, 3, 4) };
+        var adminPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Margin = new Padding(3, 4, 3, 4) };
         _adminYesRadio = new RadioButton { Text = "Sí", AutoSize = true, Enabled = false };
         _adminNoRadio = new RadioButton { Text = "No", AutoSize = true, Enabled = false, Checked = true, Margin = new Padding(12, 0, 3, 0) };
         _changeAdminCheck.CheckedChanged += (_, _) =>
@@ -119,21 +119,21 @@ public sealed class BulkEditInstallersForm : Form
         layout.Controls.Add(adminPanel, 1, row);
         row++;
 
-        _changeOrderCheck = new CheckBox { Text = "Cambiar orden a:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 6) };
-        _orderUpDown = new NumericUpDown { Minimum = 0, Maximum = 9999, Width = 80, Enabled = false, Margin = new Padding(3, 6, 3, 6) };
+        _changeOrderCheck = new CheckBox { Text = "Cambiar orden a:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 4, 3, 4) };
+        _orderUpDown = new NumericUpDown { Minimum = 0, Maximum = 9999, Width = 80, Enabled = false, Margin = new Padding(3, 4, 3, 4) };
         _changeOrderCheck.CheckedChanged += (_, _) => _orderUpDown.Enabled = _changeOrderCheck.Checked;
         layout.Controls.Add(_changeOrderCheck, 0, row);
         layout.Controls.Add(_orderUpDown, 1, row);
         row++;
 
-        _addTagsCheck = new CheckBox { Text = "Añadir tags:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 3, 6) };
-        _tagsBox = new TextBox { Dock = DockStyle.Fill, Enabled = false, PlaceholderText = "separados por comas", Margin = new Padding(3, 6, 3, 6) };
+        _addTagsCheck = new CheckBox { Text = "Añadir tags:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 4, 3, 4) };
+        _tagsBox = new TextBox { Dock = DockStyle.Fill, Enabled = false, PlaceholderText = "separados por comas", Margin = new Padding(3, 4, 3, 4) };
         _addTagsCheck.CheckedChanged += (_, _) => _tagsBox.Enabled = _addTagsCheck.Checked;
         layout.Controls.Add(_addTagsCheck, 0, row);
         layout.Controls.Add(_tagsBox, 1, row);
         row++;
 
-        var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Margin = new Padding(3, 16, 3, 3) };
+        var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Margin = new Padding(3, 8, 3, 3) };
         var cancelButton = AppTheme.CreateButton("Cancelar");
         cancelButton.DialogResult = DialogResult.Cancel;
         var okButton = AppTheme.CreateButton("Aplicar", primary: true);

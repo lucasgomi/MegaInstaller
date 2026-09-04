@@ -21,7 +21,7 @@ public sealed class SelectFolderStartupForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(480, 200);
+        ClientSize = new Size(520, 214);
 
         var icon = InstanceIconCatalog.Load("box-seam-fill");
 
@@ -31,9 +31,9 @@ public sealed class SelectFolderStartupForm : Form
         // RowStyles is positional (RowStyles[i] = row i); declare all of
         // them upfront so none fall back to an unpredictable default.
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         Controls.Add(root);
 
         if (icon is not null)

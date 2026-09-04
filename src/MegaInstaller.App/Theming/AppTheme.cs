@@ -21,19 +21,45 @@ public static class AppTheme
         Current = new AppSettingsService(AppSettingsService.DefaultPath).Load().UiTheme;
     }
 
+    /// <summary>Size a button icon is drawn at, and therefore the size it has to be stored at (see <see cref="CreateButton"/>).</summary>
+    public const int ButtonIconSize = 16;
+
     /// <summary>A button matching the active theme; pass primary:true for the one main action in a dialog.</summary>
-    public static Button CreateButton(string text, bool primary = false)
+    public static Button CreateButton(string text, bool primary = false, Image? icon = null)
     {
         Button button = IsModern ? new ModernButton { Primary = primary } : new Button();
         button.Text = text;
         button.AutoSize = true;
-        button.Margin = new Padding(4);
+        button.Margin = new Padding(4, 3, 4, 3);
         if (!IsModern && primary)
         {
             button.Font = new Font(button.Font, FontStyle.Bold);
         }
 
+        if (icon is not null)
+        {
+            // Button.AutoSize measures Image at its own pixel size, so
+            // handing it a 64px source icon makes the button ~72px tall and
+            // blows out whatever fixed-height row it sits in (which is what
+            // broke the header strip). Store it at the size it's drawn at.
+            button.Image = ScaleIcon(icon, ButtonIconSize);
+            button.ImageAlign = ContentAlignment.MiddleLeft;
+            button.TextAlign = ContentAlignment.MiddleRight;
+            button.TextImageRelation = TextImageRelation.ImageBeforeText;
+            button.Padding = new Padding(6, 0, 6, 0);
+        }
+
         return button;
+    }
+
+    private static Bitmap ScaleIcon(Image source, int size)
+    {
+        var scaled = new Bitmap(size, size);
+        using var g = Graphics.FromImage(scaled);
+        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+        g.DrawImage(source, new Rectangle(0, 0, size, size));
+        return scaled;
     }
 
     /// <summary>

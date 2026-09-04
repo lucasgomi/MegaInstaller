@@ -17,7 +17,7 @@ public sealed class ImageCropForm : Form
     private readonly Image _source;
     private readonly float _scale;
     private readonly RectangleF _imageBounds;
-    private readonly Panel _previewPanel;
+    private readonly DoubleBufferedPanel _previewPanel;
 
     private RectangleF _cropBounds;
     private bool _dragging;
@@ -51,17 +51,17 @@ public sealed class ImageCropForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(PreviewSize + 24, PreviewSize + 24 + 64);
+        ClientSize = new Size(PreviewSize + 24, PreviewSize + 24 + 74);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 1, RowCount = 3 };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, PreviewSize));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, PreviewSize + 2));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         Controls.Add(root);
 
         root.Controls.Add(new Label { Text = "Arrastra el recuadro para elegir la zona cuadrada.", AutoSize = true }, 0, 0);
 
-        _previewPanel = new Panel { Width = PreviewSize, Height = PreviewSize, BorderStyle = BorderStyle.FixedSingle };
+        _previewPanel = new DoubleBufferedPanel { Width = PreviewSize, Height = PreviewSize, BorderStyle = BorderStyle.FixedSingle, BackColor = Color.FromArgb(0x2A, 0x2D, 0x34) };
         _previewPanel.Paint += OnPreviewPaint;
         _previewPanel.MouseDown += OnPreviewMouseDown;
         _previewPanel.MouseMove += OnPreviewMouseMove;
