@@ -14,6 +14,9 @@ public sealed class InstanceDefinition
 
     public string Description { get; set; } = string.Empty;
 
+    /// <summary>Key into the app's bundled icon pack (e.g. "controller"), or null for no icon.</summary>
+    public string? IconKey { get; set; }
+
     /// <summary>References to <see cref="InstallerEntry.Id"/>. Stale ids (installer removed) are ignored when resolving.</summary>
     public List<string> InstallerIds { get; set; } = new();
 

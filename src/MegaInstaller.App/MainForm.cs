@@ -20,8 +20,8 @@ public sealed class MainForm : Form
     private InstallerManifest _manifest = new();
     private string _folder = string.Empty;
 
-    private readonly TextBox _folderTextBox;
     private readonly DataGridView _grid;
+    private readonly ToolTip _toolTip = new();
 
     public MainForm()
     {
@@ -30,26 +30,36 @@ public sealed class MainForm : Form
         Height = 620;
         MinimumSize = new Size(700, 420);
         StartPosition = FormStartPosition.CenterScreen;
+        Icon = LoadAppIcon();
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(root);
 
-        var folderPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Padding = new Padding(8, 6, 8, 6) };
-        folderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        folderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        folderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        folderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        folderPanel.Controls.Add(new Label { Text = "Carpeta de instaladores:", AutoSize = true, Anchor = AnchorStyles.Left, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-        _folderTextBox = new TextBox { Dock = DockStyle.Fill, ReadOnly = true, Margin = new Padding(6, 4, 6, 4) };
-        folderPanel.Controls.Add(_folderTextBox, 1, 0);
-        var browseButton = MakeButton("Examinar...", OnBrowseFolder);
-        folderPanel.Controls.Add(browseButton, 2, 0);
-        var openFolderButton = MakeButton("Abrir carpeta", OnOpenFolder);
-        folderPanel.Controls.Add(openFolderButton, 3, 0);
-        root.Controls.Add(folderPanel, 0, 0);
+        var headerPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(10, 6, 10, 6), BackColor = Color.FromArgb(240, 243, 247) };
+        headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        var appIcon = InstanceIconCatalog.Load("box-seam-fill");
+        if (appIcon is not null)
+        {
+            headerPanel.Controls.Add(new PictureBox { Image = appIcon, Width = 28, Height = 28, SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(0, 4, 8, 0) }, 0, 0);
+        }
+        headerPanel.Controls.Add(new Label
+        {
+            Text = "MegaInstaller",
+            AutoSize = true,
+            Font = new Font(Font.FontFamily, 13F, FontStyle.Bold),
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0, 6, 0, 0),
+        }, 1, 0);
+        var settingsButton = MakeButton("⚙ Ajustes", OnOpenSettings);
+        settingsButton.Anchor = AnchorStyles.Right;
+        _toolTip.SetToolTip(settingsButton, "Cambiar la carpeta de instaladores");
+        headerPanel.Controls.Add(settingsButton, 2, 0);
+        root.Controls.Add(headerPanel, 0, 0);
 
         var actionsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 2, 8, 2) };
         actionsPanel.Controls.Add(MakeButton("Nueva instancia...", OnNewInstance));
@@ -64,7 +74,19 @@ public sealed class MainForm : Form
         _grid = BuildGrid();
         root.Controls.Add(_grid, 0, 2);
 
-        Load += (_, _) => LoadInitialFolder();
+        Load += (_, _) => EnsureFolderForThisSession();
+    }
+
+    private static Icon? LoadAppIcon()
+    {
+        try
+        {
+            return Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException)
+        {
+            return null;
+        }
     }
 
     private static Button MakeButton(string text, EventHandler handler)
@@ -87,10 +109,13 @@ public sealed class MainForm : Form
             RowHeadersVisible = false,
             EditMode = DataGridViewEditMode.EditOnKeystrokeOrF2,
         };
+        GridStyle.Apply(grid);
 
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "Instancia", Width = 220 });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Description", HeaderText = "Descripción", Width = 340 });
+        grid.Columns.Add(new DataGridViewImageColumn { DataPropertyName = "Icon", HeaderText = "", Width = 36, ImageLayout = DataGridViewImageCellLayout.Zoom });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "Instancia", Width = 200 });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Description", HeaderText = "Descripción", Width = 320 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProgramCount", HeaderText = "Programas", Width = 90, ReadOnly = true });
+        grid.RowTemplate.Height = 32;
 
         grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) OnEditInstance(this, EventArgs.Empty); };
         grid.CurrentCellDirtyStateChanged += (_, _) =>
@@ -102,9 +127,30 @@ public sealed class MainForm : Form
         return grid;
     }
 
-    private void LoadInitialFolder()
+    /// <summary>
+    /// Shows the folder picker once per Windows logon session (tracked via
+    /// Process.SessionId) rather than on every single launch. Choosing
+    /// "Salir" there closes the whole app instead of leaving Home half set up.
+    /// </summary>
+    private void EnsureFolderForThisSession()
     {
         var settings = _settingsService.Load();
+        var currentSessionId = System.Diagnostics.Process.GetCurrentProcess().SessionId;
+
+        if (settings.LastWindowsSessionId != currentSessionId)
+        {
+            using var startupForm = new SelectFolderStartupForm(settings.LastFolder);
+            if (startupForm.ShowDialog(this) != DialogResult.OK || startupForm.SelectedFolder is null)
+            {
+                Application.Exit();
+                return;
+            }
+
+            settings.LastFolder = startupForm.SelectedFolder;
+            settings.LastWindowsSessionId = currentSessionId;
+            _settingsService.Save(settings);
+        }
+
         if (!string.IsNullOrWhiteSpace(settings.LastFolder) && Directory.Exists(settings.LastFolder))
         {
             LoadFolder(settings.LastFolder);
@@ -133,8 +179,11 @@ public sealed class MainForm : Form
         }
 
         _folder = folder;
-        _folderTextBox.Text = folder;
-        _settingsService.Save(new AppSettings { LastFolder = folder });
+
+        var settings = _settingsService.Load();
+        settings.LastFolder = folder;
+        _settingsService.Save(settings);
+
         RefreshGrid();
     }
 
@@ -167,24 +216,16 @@ public sealed class MainForm : Form
     private InstanceRow? SelectedRow() =>
         _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.DataBoundItem as InstanceRow).FirstOrDefault();
 
-    private void OnBrowseFolder(object? sender, EventArgs e)
+    private void OnOpenSettings(object? sender, EventArgs e)
     {
-        using var dialog = new FolderBrowserDialog { Description = "Selecciona (o crea) la carpeta donde viven tus instaladores" };
-        if (!string.IsNullOrEmpty(_folder)) dialog.SelectedPath = _folder;
-        if (dialog.ShowDialog(this) == DialogResult.OK)
-        {
-            LoadFolder(dialog.SelectedPath);
-        }
-    }
+        using var settingsForm = new SettingsForm(_folder);
+        settingsForm.ShowDialog(this);
 
-    private void OnOpenFolder(object? sender, EventArgs e)
-    {
-        if (!EnsureFolderSelected()) return;
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        if (!string.IsNullOrWhiteSpace(settingsForm.SelectedFolder) &&
+            !string.Equals(settingsForm.SelectedFolder, _folder, StringComparison.OrdinalIgnoreCase))
         {
-            FileName = _folder,
-            UseShellExecute = true,
-        });
+            LoadFolder(settingsForm.SelectedFolder);
+        }
     }
 
     private void OnOpenLibrary(object? sender, EventArgs e)

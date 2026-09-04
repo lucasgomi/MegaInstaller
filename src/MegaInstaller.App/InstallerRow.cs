@@ -7,12 +7,15 @@ namespace MegaInstaller.App;
 /// <summary>Thin, bindable wrapper around an <see cref="InstallerEntry"/> for the grid.</summary>
 public sealed class InstallerRow : INotifyPropertyChanged
 {
-    public InstallerRow(InstallerEntry entry)
+    public InstallerRow(InstallerEntry entry, string folder)
     {
         Entry = entry;
+        Icon = IconExtractor.TryExtract(Path.Combine(folder, entry.FileName));
     }
 
     public InstallerEntry Entry { get; }
+
+    public Image? Icon { get; }
 
     public bool Enabled
     {

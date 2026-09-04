@@ -4,5 +4,11 @@ namespace MegaInstaller.Core.Models;
 public sealed class AppSettings
 {
     public string? LastFolder { get; set; }
-    public bool StopOnError { get; set; }
+
+    /// <summary>
+    /// Windows logon session id (see Process.SessionId) last seen at startup.
+    /// Used to show the folder picker once per Windows session instead of
+    /// on every single launch.
+    /// </summary>
+    public int? LastWindowsSessionId { get; set; }
 }

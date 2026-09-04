@@ -39,6 +39,8 @@ public sealed class InstanceRow : INotifyPropertyChanged
 
     public int ProgramCount { get; }
 
+    public Image? Icon => InstanceIconCatalog.Load(Instance.IconKey);
+
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>

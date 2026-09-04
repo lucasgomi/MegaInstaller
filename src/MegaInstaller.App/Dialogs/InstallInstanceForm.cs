@@ -46,7 +46,21 @@ public sealed class InstallInstanceForm : Form
         var headerText = string.IsNullOrWhiteSpace(instance.Description)
             ? $"{resolvedEntries.Count} programa(s) en esta instancia."
             : $"{instance.Description}\n{resolvedEntries.Count} programa(s) en esta instancia.";
-        root.Controls.Add(new Label { Text = headerText, AutoSize = true, MaximumSize = new Size(480, 0) }, 0, 0);
+        var headerPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false };
+        var icon = InstanceIconCatalog.Load(instance.IconKey);
+        if (icon is not null)
+        {
+            headerPanel.Controls.Add(new PictureBox
+            {
+                Image = icon,
+                Width = 36,
+                Height = 36,
+                SizeMode = PictureBoxSizeMode.Zoom,
+                Margin = new Padding(0, 0, 10, 0),
+            });
+        }
+        headerPanel.Controls.Add(new Label { Text = headerText, AutoSize = true, MaximumSize = new Size(440, 0), Anchor = AnchorStyles.Left, Margin = new Padding(0, 4, 0, 0) });
+        root.Controls.Add(headerPanel, 0, 0);
 
         var modePanel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true };
         _easyModeRadio = new RadioButton { Text = "Modo fácil (todo, rutas automáticas)", AutoSize = true, Checked = true };

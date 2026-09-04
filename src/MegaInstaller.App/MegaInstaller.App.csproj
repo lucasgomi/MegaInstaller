@@ -9,8 +9,9 @@
     <AssemblyName>MegaInstaller</AssemblyName>
     <RootNamespace>MegaInstaller.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
     <InvariantGlobalization>true</InvariantGlobalization>
-    <Version>1.0.0</Version>
+    <Version>3.0.0</Version>
 
     <!--
       Lets `dotnet build`/`publish` target net8.0-windows (WinForms) from a
@@ -37,6 +38,17 @@
 
   <ItemGroup>
     <ProjectReference Include="../MegaInstaller.Core/MegaInstaller.Core.csproj" />
+  </ItemGroup>
+
+  <!-- Bundled instance icons (Bootstrap Icons, MIT - see Resources/InstanceIcons/THIRD-PARTY-NOTICES.md). -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\InstanceIcons\*.png">
+      <LogicalName>InstanceIcons.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+    <None Remove="Resources\InstanceIcons\THIRD-PARTY-NOTICES.md" />
+    <Content Include="Resources\InstanceIcons\THIRD-PARTY-NOTICES.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>
