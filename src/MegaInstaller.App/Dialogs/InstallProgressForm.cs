@@ -48,7 +48,7 @@ public sealed class InstallProgressForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         Controls.Add(root);
 
         _rows = new BindingList<InstallerRow>(_entries.Select(e => new InstallerRow(e, folder)).ToList());

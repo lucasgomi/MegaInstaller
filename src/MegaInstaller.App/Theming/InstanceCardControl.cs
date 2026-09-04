@@ -87,9 +87,13 @@ public sealed class InstanceCardControl : Control
         g.Clear(Parent?.BackColor ?? SystemColors.Control);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        var rect = new Rectangle(0, 0, Width - 1, Height - 1);
-        using var path = RoundedRect(rect, 12);
+
+        // Inset by half the pen width: a stroke is centred on its path, so
+        // a path along the very edge spills half of itself outside the
+        // control, where it gets clipped - which is what made the border
+        // look thicker on some sides than others.
+        var borderWidth = _selected ? 2f : 1f;
+        using var path = RoundedRect(new RectangleF(borderWidth / 2f, borderWidth / 2f, Width - borderWidth, Height - borderWidth), 12f);
 
         var borderColor = _selected ? _accentColor : _hovered ? ControlPaint.Light(_accentColor, 0.5f) : ModernPalette.Border;
         var backColor = _isAddTile ? ModernPalette.Background : ModernPalette.Surface;
@@ -99,7 +103,7 @@ public sealed class InstanceCardControl : Control
             g.FillPath(backBrush, path);
         }
 
-        using (var pen = new Pen(borderColor, _selected ? 2f : 1f))
+        using (var pen = new Pen(borderColor, borderWidth))
         {
             if (_isAddTile)
             {
@@ -127,7 +131,7 @@ public sealed class InstanceCardControl : Control
             // built-in glyph or an arbitrary custom photo alike, instead of
             // a photo's square corners poking out of the round badge.
             var iconRect = new Rectangle(pad, pad, 32, 32);
-            using var scaledIcon = new Bitmap(_icon, iconRect.Size);
+            using var scaledIcon = ScaleIcon(_icon, iconRect.Size);
             using var iconBrush = new TextureBrush(scaledIcon, WrapMode.Clamp);
             iconBrush.TranslateTransform(iconRect.X, iconRect.Y);
             g.FillEllipse(iconBrush, iconRect);
@@ -152,7 +156,7 @@ public sealed class InstanceCardControl : Control
         using var badgeFont = new Font(Font.FontFamily, 8F);
         var badgeSize = g.MeasureString(badgeText, badgeFont);
         var badgeRect = new RectangleF(pad, Height - pad - 20, badgeSize.Width + 14, 20);
-        using var badgePath = RoundedRect(Rectangle.Round(badgeRect), 10);
+        using var badgePath = RoundedRect(badgeRect, 10f);
         using (var badgeBrush = new SolidBrush(InstanceColorPalette.Tint(_accentColor)))
         {
             g.FillPath(badgeBrush, badgePath);
@@ -176,9 +180,19 @@ public sealed class InstanceCardControl : Control
         g.DrawString(_name, captionFont, textBrush, (Width - capSize.Width) / 2, 82);
     }
 
-    private static GraphicsPath RoundedRect(Rectangle rect, int radius)
+    private static Bitmap ScaleIcon(Image source, Size size)
     {
-        var diameter = Math.Max(1, Math.Min(radius * 2, Math.Min(rect.Width, rect.Height)));
+        var scaled = new Bitmap(size.Width, size.Height);
+        using var g = Graphics.FromImage(scaled);
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+        g.DrawImage(source, new Rectangle(0, 0, size.Width, size.Height));
+        return scaled;
+    }
+
+    private static GraphicsPath RoundedRect(RectangleF rect, float radius)
+    {
+        var diameter = Math.Max(1f, Math.Min(radius * 2f, Math.Min(rect.Width, rect.Height)));
         var path = new GraphicsPath();
         path.AddArc(rect.X, rect.Y, diameter, diameter, 180, 90);
         path.AddArc(rect.Right - diameter, rect.Y, diameter, diameter, 270, 90);

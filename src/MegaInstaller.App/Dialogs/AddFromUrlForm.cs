@@ -35,7 +35,7 @@ public sealed class AddFromUrlForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(480, 210);
+        ClientSize = new Size(520, 226);
 
         var layout = new TableLayoutPanel
         {
@@ -48,7 +48,7 @@ public sealed class AddFromUrlForm : Form
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         // RowStyles is positional (RowStyles[i] = row i); declare all of
         // them upfront so none fall back to an unpredictable default.
-        int[] rowHeights = { 32, 32, 28, 28, 40 };
+        int[] rowHeights = { 34, 34, 28, 28, 46 };
         foreach (var height in rowHeights)
         {
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
