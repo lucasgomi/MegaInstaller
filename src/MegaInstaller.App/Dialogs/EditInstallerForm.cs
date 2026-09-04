@@ -34,7 +34,7 @@ public sealed class EditInstallerForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(520, 594);
+        ClientSize = new Size(520, 500);
 
         var layout = new TableLayoutPanel
         {
@@ -47,6 +47,16 @@ public sealed class EditInstallerForm : Form
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        // RowStyles is a plain positional list - RowStyles[i] governs row i
+        // regardless of when in the code below it's added, so every row's
+        // style must be declared here, upfront, in row order. Adding a
+        // style only after placing that row's controls silently applies it
+        // to an earlier, still-unstyled row instead.
+        int[] rowHeights = { 28, 32, 32, 32, 32, 32, 32, 76, 32, 96, 40 };
+        foreach (var height in rowHeights)
+        {
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        }
         Controls.Add(layout);
 
         var row = 0;
@@ -108,7 +118,6 @@ public sealed class EditInstallerForm : Form
         _notesBox = new TextBox { Dock = DockStyle.Fill, Multiline = true, Height = 70, Text = entry.Notes };
         layout.Controls.Add(_notesBox, 1, row);
         layout.SetColumnSpan(_notesBox, 2);
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
         row++;
 
         layout.Controls.Add(new Label { Text = "Tags:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
@@ -134,7 +143,6 @@ public sealed class EditInstallerForm : Form
         }
         layout.Controls.Add(_instancesList, 1, row);
         layout.SetColumnSpan(_instancesList, 2);
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 96));
         row++;
 
         var buttonsPanel = new FlowLayoutPanel

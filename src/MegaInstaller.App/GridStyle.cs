@@ -40,6 +40,15 @@ public static class GridStyle
         grid.ColumnHeadersDefaultCellStyle.ForeColor = Color.FromArgb(50, 55, 60);
         grid.ColumnHeadersDefaultCellStyle.Font = new Font(grid.Font.FontFamily, grid.Font.Size, FontStyle.Bold);
         grid.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+        // Without an explicit override, a header cell's "selected" state
+        // (e.g. the header of whichever column the current cell sits in)
+        // falls back to DataGridView.DefaultCellStyle.SelectionBackColor
+        // below - this is what actually produced the "top of the column
+        // highlights blue" glitch, not anything about the icon cells
+        // themselves. Pinning both to the normal header colors makes a
+        // header look the same regardless of selection state.
+        grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = grid.ColumnHeadersDefaultCellStyle.BackColor;
+        grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = grid.ColumnHeadersDefaultCellStyle.ForeColor;
 
         grid.DefaultCellStyle.SelectionBackColor = Color.FromArgb(204, 228, 247);
         grid.DefaultCellStyle.SelectionForeColor = Color.Black;

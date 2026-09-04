@@ -18,9 +18,15 @@ public sealed class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(520, 160);
+        ClientSize = new Size(520, 175);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 4 };
+        // RowStyles is positional (RowStyles[i] = row i); declare all of
+        // them upfront so none fall back to an unpredictable default.
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         Controls.Add(root);
 
         root.Controls.Add(new Label { Text = "Carpeta de instaladores:", AutoSize = true }, 0, 0);
