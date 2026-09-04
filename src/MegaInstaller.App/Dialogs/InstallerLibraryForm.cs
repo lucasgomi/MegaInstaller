@@ -20,6 +20,8 @@ public sealed class InstallerLibraryForm : Form
 
     private readonly DataGridView _grid;
     private readonly CheckBox _stopOnErrorCheck;
+    private readonly TextBox _searchBox;
+    private readonly ToolTip _toolTip = new();
 
     public bool ManifestChanged { get; private set; }
 
@@ -29,16 +31,26 @@ public sealed class InstallerLibraryForm : Form
 
         Text = $"Editor de programas - {folder}";
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(980, 620);
-        MinimumSize = new Size(760, 440);
+        ClientSize = new Size(1040, 640);
+        MinimumSize = new Size(780, 440);
 
         _manifest = LoadManifest();
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         Controls.Add(root);
+
+        var searchPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(8, 4, 8, 4) };
+        searchPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        searchPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        searchPanel.Controls.Add(new Label { Text = "Buscar:", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(0, 6, 6, 0) }, 0, 0);
+        _searchBox = new TextBox { Dock = DockStyle.Fill, PlaceholderText = "Nombre, archivo o tag..." };
+        _searchBox.TextChanged += (_, _) => RefreshGrid();
+        searchPanel.Controls.Add(_searchBox, 1, 0);
+        root.Controls.Add(searchPanel, 0, 0);
 
         var actionsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 4, 8, 4) };
         var addFileButton = MakeButton("Añadir archivo(s)...", OnAddFile);
@@ -46,19 +58,21 @@ public sealed class InstallerLibraryForm : Form
         var importButton = MakeButton("Importar de la carpeta", OnImportFound);
         var detectButton = MakeButton("Detectar tipo", OnDetectType);
         var editButton = MakeButton("Editar...", OnEdit);
+        var bulkEditButton = MakeButton("Editar marcados...", OnBulkEdit);
+        _toolTip.SetToolTip(bulkEditButton, "Edita a la vez los programas con la casilla marcada en la columna izquierda de la tabla.");
         var removeButton = MakeButton("Quitar", OnRemove);
-        actionsPanel.Controls.AddRange(new Control[] { addFileButton, addUrlButton, importButton, detectButton, editButton, removeButton });
-        root.Controls.Add(actionsPanel, 0, 0);
+        actionsPanel.Controls.AddRange(new Control[] { addFileButton, addUrlButton, importButton, detectButton, editButton, bulkEditButton, removeButton });
+        root.Controls.Add(actionsPanel, 0, 1);
 
         _grid = BuildGrid();
-        root.Controls.Add(_grid, 0, 1);
+        root.Controls.Add(_grid, 0, 2);
 
         var installPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 6, 8, 6) };
         var installSelectedButton = MakeButton("Instalar seleccionados", OnInstallSelected);
         var installAllButton = MakeButton("Instalar todo", OnInstallAll);
         _stopOnErrorCheck = new CheckBox { Text = "Detener si falla uno", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(16, 8, 0, 0) };
         installPanel.Controls.AddRange(new Control[] { installSelectedButton, installAllButton, _stopOnErrorCheck });
-        root.Controls.Add(installPanel, 0, 2);
+        root.Controls.Add(installPanel, 0, 3);
 
         RefreshGrid();
     }
@@ -86,11 +100,14 @@ public sealed class InstallerLibraryForm : Form
         GridStyle.Apply(grid);
 
         grid.Columns.Add(new DataGridViewCheckBoxColumn { DataPropertyName = "Enabled", HeaderText = "", Width = 30 });
-        grid.Columns.Add(new DataGridViewImageColumn { DataPropertyName = "Icon", HeaderText = "", Width = 32, ImageLayout = DataGridViewImageCellLayout.Zoom });
+        var iconColumn = new DataGridViewImageColumn { DataPropertyName = "Icon", HeaderText = "", Width = 32, ImageLayout = DataGridViewImageCellLayout.Zoom };
+        GridStyle.ApplyIconColumn(iconColumn);
+        grid.Columns.Add(iconColumn);
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "Nombre", Width = 200 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "FileName", HeaderText = "Archivo", Width = 180, ReadOnly = true });
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Type", HeaderText = "Tipo", Width = 100, ReadOnly = true });
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Arguments", HeaderText = "Argumentos", Width = 180, ReadOnly = true });
+        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Tags", HeaderText = "Tags", Width = 120, ReadOnly = true });
         grid.Columns.Add(new DataGridViewCheckBoxColumn
         {
             DataPropertyName = "RunAsAdmin", HeaderText = "Admin", Width = 55, ReadOnly = true,
@@ -137,8 +154,18 @@ public sealed class InstallerLibraryForm : Form
 
     private void RefreshGrid()
     {
-        var rows = new BindingList<InstallerRow>(
-            _manifest.Items.OrderBy(i => i.Order).Select(i => new InstallerRow(i, _folder)).ToList());
+        var query = _manifest.Items.OrderBy(i => i.Order).AsEnumerable();
+
+        var search = _searchBox.Text.Trim();
+        if (!string.IsNullOrEmpty(search))
+        {
+            query = query.Where(i =>
+                i.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                i.FileName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                TagUtils.MatchesAny(i.Tags, search));
+        }
+
+        var rows = new BindingList<InstallerRow>(query.Select(i => new InstallerRow(i, _folder)).ToList());
         _grid.DataSource = rows;
     }
 
@@ -306,6 +333,28 @@ public sealed class InstallerLibraryForm : Form
             row.RefreshAll();
             SaveManifest();
         }
+    }
+
+    private void OnBulkEdit(object? sender, EventArgs e)
+    {
+        var rows = GridRows.Where(r => r.Enabled).ToList();
+        if (rows.Count == 0)
+        {
+            MessageBox.Show(this,
+                "Marca la casilla de los programas que quieres editar juntos (columna izquierda de la tabla).",
+                "Nada marcado", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var bulkForm = new BulkEditInstallersForm(rows.Select(r => r.Entry).ToList());
+        if (bulkForm.ShowDialog(this) != DialogResult.OK) return;
+
+        foreach (var row in rows)
+        {
+            row.RefreshAll();
+        }
+
+        SaveManifest();
     }
 
     private void OnRemove(object? sender, EventArgs e)

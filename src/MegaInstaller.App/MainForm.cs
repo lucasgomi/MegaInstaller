@@ -111,7 +111,9 @@ public sealed class MainForm : Form
         };
         GridStyle.Apply(grid);
 
-        grid.Columns.Add(new DataGridViewImageColumn { DataPropertyName = "Icon", HeaderText = "", Width = 36, ImageLayout = DataGridViewImageCellLayout.Zoom });
+        var iconColumn = new DataGridViewImageColumn { DataPropertyName = "Icon", HeaderText = "", Width = 36, ImageLayout = DataGridViewImageCellLayout.Zoom };
+        GridStyle.ApplyIconColumn(iconColumn);
+        grid.Columns.Add(iconColumn);
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "Instancia", Width = 200 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Description", HeaderText = "Descripción", Width = 320 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProgramCount", HeaderText = "Programas", Width = 90, ReadOnly = true });

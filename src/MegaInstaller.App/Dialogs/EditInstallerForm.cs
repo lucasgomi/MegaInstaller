@@ -21,6 +21,7 @@ public sealed class EditInstallerForm : Form
     private readonly CheckBox _runAsAdminCheck;
     private readonly NumericUpDown _orderUpDown;
     private readonly TextBox _notesBox;
+    private readonly TextBox _tagsBox;
     private readonly CheckedListBox _instancesList;
 
     public EditInstallerForm(InstallerEntry entry, IReadOnlyList<InstanceDefinition> instances)
@@ -33,14 +34,14 @@ public sealed class EditInstallerForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(520, 560);
+        ClientSize = new Size(520, 594);
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(12),
             ColumnCount = 3,
-            RowCount = 10,
+            RowCount = 11,
             AutoSize = false,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
@@ -108,6 +109,12 @@ public sealed class EditInstallerForm : Form
         layout.Controls.Add(_notesBox, 1, row);
         layout.SetColumnSpan(_notesBox, 2);
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Tags:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+        _tagsBox = new TextBox { Dock = DockStyle.Fill, Text = TagUtils.Join(entry.Tags), PlaceholderText = "separados por comas, p. ej.: dev, cli" };
+        layout.Controls.Add(_tagsBox, 1, row);
+        layout.SetColumnSpan(_tagsBox, 2);
         row++;
 
         layout.Controls.Add(new Label { Text = "Instancias:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top }, 0, row);
@@ -212,6 +219,7 @@ public sealed class EditInstallerForm : Form
         _entry.RunAsAdmin = _runAsAdminCheck.Checked;
         _entry.Order = (int)_orderUpDown.Value;
         _entry.Notes = _notesBox.Text.Trim();
+        _entry.Tags = TagUtils.Parse(_tagsBox.Text);
 
         if (_instances.Count > 0)
         {
