@@ -310,7 +310,8 @@ public sealed class MainForm : Form
     private void OnOpenSettings(object? sender, EventArgs e)
     {
         var themeBefore = AppTheme.Current;
-        using var settingsForm = new SettingsForm(_folder, themeBefore);
+        var settingsBefore = _settingsService.Load();
+        using var settingsForm = new SettingsForm(_folder, themeBefore, settingsBefore);
         settingsForm.ShowDialog(this);
 
         if (!string.IsNullOrWhiteSpace(settingsForm.SelectedFolder) &&
@@ -319,12 +320,16 @@ public sealed class MainForm : Form
             LoadFolder(settingsForm.SelectedFolder);
         }
 
+        // Re-read rather than reusing settingsBefore: LoadFolder above may
+        // have written the newly picked folder to the same file.
+        var settings = _settingsService.Load();
+        settings.TroubleshooterEnabled = settingsForm.TroubleshooterEnabled;
+        settings.SkipElevationOffer = settingsForm.SkipElevationOffer;
+        settings.UiTheme = settingsForm.SelectedTheme;
+        _settingsService.Save(settings);
+
         if (settingsForm.SelectedTheme != themeBefore)
         {
-            var settings = _settingsService.Load();
-            settings.UiTheme = settingsForm.SelectedTheme;
-            _settingsService.Save(settings);
-
             var restart = MessageBox.Show(this,
                 "El nuevo aspecto se aplicará al reiniciar MegaInstaller. ¿Reiniciar ahora?",
                 "Reinicio necesario", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
