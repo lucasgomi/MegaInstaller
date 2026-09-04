@@ -55,11 +55,11 @@ public sealed class InstanceCardControl : Control
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
     }
 
-    public static InstanceCardControl ForInstance(InstanceDefinition instance, int programCount) => new(
+    public static InstanceCardControl ForInstance(InstanceDefinition instance, int programCount, string folder) => new(
         instance.Id,
         instance.Name,
         instance.Description,
-        InstanceIconCatalog.Load(instance.IconKey),
+        InstanceIconCatalog.LoadForInstance(instance.IconKey, folder),
         programCount,
         InstanceColorPalette.Resolve(instance.ColorHex, ModernPalette.Accent),
         isAddTile: false);
@@ -71,9 +71,20 @@ public sealed class InstanceCardControl : Control
 
     protected override void OnMouseLeave(EventArgs e) { _hovered = false; Invalidate(); base.OnMouseLeave(e); }
 
+    // Painting is fully custom (see OnPaint); skipping the default
+    // background fill avoids the same black-corner artifact ModernButton
+    // had (a plain Control paints a "transparent" BackColor as solid black
+    // once ControlStyles.OptimizedDoubleBuffer is on, instead of showing
+    // the parent through) - here it showed up as corners outside the
+    // rounded card looking like an extra, inconsistent border.
+    protected override void OnPaintBackground(PaintEventArgs e)
+    {
+    }
+
     protected override void OnPaint(PaintEventArgs e)
     {
         var g = e.Graphics;
+        g.Clear(Parent?.BackColor ?? SystemColors.Control);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
         g.PixelOffsetMode = PixelOffsetMode.HighQuality;
@@ -112,7 +123,14 @@ public sealed class InstanceCardControl : Control
                 g.FillEllipse(badgeBrush, pad - 4, pad - 4, 40, 40);
             }
 
-            g.DrawImage(_icon, new Rectangle(pad, pad, 32, 32));
+            // A circular mask puts every icon through the same frame,
+            // built-in glyph or an arbitrary custom photo alike, instead of
+            // a photo's square corners poking out of the round badge.
+            var iconRect = new Rectangle(pad, pad, 32, 32);
+            using var scaledIcon = new Bitmap(_icon, iconRect.Size);
+            using var iconBrush = new TextureBrush(scaledIcon, WrapMode.Clamp);
+            iconBrush.TranslateTransform(iconRect.X, iconRect.Y);
+            g.FillEllipse(iconBrush, iconRect);
         }
 
         using var nameFont = new Font(Font.FontFamily, 10.5F, FontStyle.Bold);
