@@ -39,6 +39,7 @@ public sealed class ModernButton : Button
     {
         var g = pevent.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
+        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
 
         var rect = new Rectangle(0, 0, Width - 1, Height - 1);
         using var path = RoundedRect(rect, 6);
@@ -84,8 +85,21 @@ public sealed class ModernButton : Button
             g.DrawPath(focusPen, focusPath);
         }
 
-        TextRenderer.DrawText(g, Text, Font, rect, textColor,
-            TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        if (Image is not null)
+        {
+            const int iconSize = 16;
+            var iconRect = new Rectangle(rect.X + 10, rect.Y + (rect.Height - iconSize) / 2, iconSize, iconSize);
+            g.DrawImage(Image, iconRect);
+
+            var textRect = new Rectangle(iconRect.Right + 6, rect.Y, rect.Width - (iconRect.Right + 6 - rect.X) - 6, rect.Height);
+            TextRenderer.DrawText(g, Text, Font, textRect, textColor,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
+        else
+        {
+            TextRenderer.DrawText(g, Text, Font, rect, textColor,
+                TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+        }
     }
 
     private static GraphicsPath RoundedRect(Rectangle rect, int radius)

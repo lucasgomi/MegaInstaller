@@ -17,6 +17,9 @@ public sealed class InstanceDefinition
     /// <summary>Key into the app's bundled icon pack (e.g. "controller"), or null for no icon.</summary>
     public string? IconKey { get; set; }
 
+    /// <summary>"#RRGGBB" accent color for this instance's card, or null to use the theme's default accent.</summary>
+    public string? ColorHex { get; set; }
+
     /// <summary>References to <see cref="InstallerEntry.Id"/>. Stale ids (installer removed) are ignored when resolving.</summary>
     public List<string> InstallerIds { get; set; } = new();
 

@@ -12,7 +12,7 @@ namespace MegaInstaller.App.Theming;
 /// </summary>
 public static class AppTheme
 {
-    public static UiThemeMode Current { get; private set; } = UiThemeMode.Classic;
+    public static UiThemeMode Current { get; private set; } = UiThemeMode.Modern;
 
     public static bool IsModern => Current == UiThemeMode.Modern;
 

@@ -77,6 +77,7 @@ public class ManifestServiceTests : IDisposable
                     Name = "Pack básico",
                     Description = "Lo esencial",
                     IconKey = "controller",
+                    ColorHex = "#5B5FEF",
                     InstallerIds = { "a" },
                     Order = 1,
                 }
@@ -89,6 +90,7 @@ public class ManifestServiceTests : IDisposable
         var instance = Assert.Single(loaded.Instances);
         Assert.Equal("Pack básico", instance.Name);
         Assert.Equal("controller", instance.IconKey);
+        Assert.Equal("#5B5FEF", instance.ColorHex);
         Assert.Equal(new[] { "a" }, instance.InstallerIds);
     }
 
