@@ -21,6 +21,7 @@ public sealed class InstanceCardControl : Control
     private readonly string _name;
     private readonly string _description;
     private readonly Image? _icon;
+    private readonly bool _isCustomIcon;
     private readonly int _programCount;
     private readonly Color _accentColor;
     private readonly bool _isAddTile;
@@ -39,12 +40,13 @@ public sealed class InstanceCardControl : Control
         }
     }
 
-    private InstanceCardControl(string? instanceId, string name, string description, Image? icon, int programCount, Color accentColor, bool isAddTile)
+    private InstanceCardControl(string? instanceId, string name, string description, Image? icon, bool isCustomIcon, int programCount, Color accentColor, bool isAddTile)
     {
         InstanceId = instanceId;
         _name = name;
         _description = description;
         _icon = icon;
+        _isCustomIcon = isCustomIcon;
         _programCount = programCount;
         _accentColor = accentColor;
         _isAddTile = isAddTile;
@@ -60,12 +62,13 @@ public sealed class InstanceCardControl : Control
         instance.Name,
         instance.Description,
         InstanceIconCatalog.LoadForInstance(instance.IconKey, folder),
+        InstanceIconCatalog.IsCustomKey(instance.IconKey),
         programCount,
         InstanceColorPalette.Resolve(instance.ColorHex, ModernPalette.Accent),
         isAddTile: false);
 
     public static InstanceCardControl CreateAddTile() =>
-        new(null, "Nueva instancia", string.Empty, null, 0, ModernPalette.Accent, isAddTile: true);
+        new(null, "Nueva instancia", string.Empty, null, false, 0, ModernPalette.Accent, isAddTile: true);
 
     protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
 
@@ -122,19 +125,40 @@ public sealed class InstanceCardControl : Control
         const int pad = 14;
         if (_icon is not null)
         {
+            var iconBadgeRect = new Rectangle(pad - 4, pad - 4, 40, 40);
             using (var badgeBrush = new SolidBrush(InstanceColorPalette.Tint(_accentColor)))
             {
-                g.FillEllipse(badgeBrush, pad - 4, pad - 4, 40, 40);
+                g.FillEllipse(badgeBrush, iconBadgeRect);
             }
 
-            // A circular mask puts every icon through the same frame,
-            // built-in glyph or an arbitrary custom photo alike, instead of
-            // a photo's square corners poking out of the round badge.
-            var iconRect = new Rectangle(pad, pad, 32, 32);
-            using var scaledIcon = ScaleIcon(_icon, iconRect.Size);
-            using var iconBrush = new TextureBrush(scaledIcon, WrapMode.Clamp);
-            iconBrush.TranslateTransform(iconRect.X, iconRect.Y);
-            g.FillEllipse(iconBrush, iconRect);
+            using var clipPath = new GraphicsPath();
+            clipPath.AddEllipse(iconBadgeRect);
+            var previousClip = g.Clip;
+            g.SetClip(clipPath, CombineMode.Replace);
+
+            if (_isCustomIcon)
+            {
+                // A custom upload is already pre-cropped to a square for
+                // exactly this (see ImageCropForm), so it can cover the
+                // whole badge edge to edge like any circular avatar photo.
+                g.DrawImage(_icon, iconBadgeRect);
+            }
+            else
+            {
+                // Built-in glyphs are drawn close to their full square
+                // canvas, so covering the badge edge to edge clipped them
+                // against the circle wherever their ink reached a corner
+                // (e.g. a folder icon's tab). Drawing them smaller and
+                // centred keeps the whole glyph inside the circle instead.
+                const int glyphSize = 24;
+                var glyphRect = new Rectangle(
+                    iconBadgeRect.X + (iconBadgeRect.Width - glyphSize) / 2,
+                    iconBadgeRect.Y + (iconBadgeRect.Height - glyphSize) / 2,
+                    glyphSize, glyphSize);
+                g.DrawImage(_icon, glyphRect);
+            }
+
+            g.Clip = previousClip;
         }
 
         using var nameFont = new Font(Font.FontFamily, 10.5F, FontStyle.Bold);
@@ -178,16 +202,6 @@ public sealed class InstanceCardControl : Control
         using var captionFont = new Font(Font.FontFamily, 9F);
         var capSize = g.MeasureString(_name, captionFont);
         g.DrawString(_name, captionFont, textBrush, (Width - capSize.Width) / 2, 82);
-    }
-
-    private static Bitmap ScaleIcon(Image source, Size size)
-    {
-        var scaled = new Bitmap(size.Width, size.Height);
-        using var g = Graphics.FromImage(scaled);
-        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        g.DrawImage(source, new Rectangle(0, 0, size.Width, size.Height));
-        return scaled;
     }
 
     private static GraphicsPath RoundedRect(RectangleF rect, float radius)

@@ -102,14 +102,19 @@ public sealed class MainForm : Form
         {
             titlePanel.Controls.Add(new Label
             {
+                Text = "-",
+                AutoSize = true,
+                Font = titleFont,
+                ForeColor = AppTheme.IsModern ? ModernPalette.TextSecondary : SystemColors.ControlText,
+                Margin = new Padding(6, 0, 6, 0),
+            });
+            titlePanel.Controls.Add(new Label
+            {
                 Text = "AdminMode",
                 AutoSize = true,
                 Font = titleFont,
                 ForeColor = ModernPalette.AdminGold,
-                // Small margin only: an AutoSize label already carries a few
-                // pixels of its own slack, so anything larger reads as a gap
-                // rather than as part of the same title.
-                Margin = new Padding(2, 0, 0, 0),
+                Margin = new Padding(0),
             });
         }
         headerPanel.Controls.Add(titlePanel, 1, 0);
@@ -120,13 +125,26 @@ public sealed class MainForm : Form
         root.Controls.Add(headerPanel, 0, 0);
 
         var actionsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 2, 8, 2) };
-        actionsPanel.Controls.Add(MakeButton("Nueva instancia...", OnNewInstance));
-        actionsPanel.Controls.Add(MakeButton("Editar instancia...", OnEditInstance));
-        actionsPanel.Controls.Add(MakeButton("Eliminar instancia", OnRemoveInstance));
-        actionsPanel.Controls.Add(MakeButton("Instalar instancia...", OnInstallInstance, primary: true));
-        var libraryButton = MakeButton("Editor de programas...", OnOpenLibrary);
-        libraryButton.Margin = new Padding(40, 4, 4, 4);
-        actionsPanel.Controls.Add(libraryButton);
+
+        // Nueva/Editar/Eliminar are all "manage the selected instance" actions,
+        // so they live behind one dropdown instead of three separate buttons -
+        // that's also what leaves room in this bar for "Instalar varias...".
+        var instanceMenu = new ContextMenuStrip();
+        instanceMenu.Items.Add(AppTheme.CreateMenuItem("Nueva instancia...", OnNewInstance));
+        instanceMenu.Items.Add(AppTheme.CreateMenuItem("Editar instancia...", OnEditInstance));
+        instanceMenu.Items.Add(AppTheme.CreateMenuItem("Eliminar instancia", OnRemoveInstance));
+        actionsPanel.Controls.Add(AppTheme.CreateDropdownButton("Instancia", instanceMenu));
+
+        actionsPanel.Controls.Add(MakeDivider());
+
+        var installMenu = new ContextMenuStrip();
+        installMenu.Items.Add(AppTheme.CreateMenuItem("Instalar seleccionada...", OnInstallInstance));
+        installMenu.Items.Add(AppTheme.CreateMenuItem("Instalar varias...", OnInstallMultiple));
+        actionsPanel.Controls.Add(AppTheme.CreateDropdownButton("Instalar", installMenu, primary: true));
+
+        actionsPanel.Controls.Add(MakeDivider());
+
+        actionsPanel.Controls.Add(MakeButton("Editor de programas...", OnOpenLibrary));
         root.Controls.Add(actionsPanel, 0, 1);
 
         if (AppTheme.IsModern)
@@ -163,6 +181,15 @@ public sealed class MainForm : Form
         return button;
     }
 
+    /// <summary>A thin vertical rule separating groups of actions in the top bar - inset top/bottom so it reads as deliberate, not a stray line.</summary>
+    private static Control MakeDivider() => new Panel
+    {
+        Width = 1,
+        Height = 28,
+        Margin = new Padding(6, 7, 6, 7),
+        BackColor = AppTheme.IsModern ? ModernPalette.Border : SystemColors.ControlDark,
+    };
+
     private DataGridView BuildGrid()
     {
         var grid = new DataGridView
@@ -186,7 +213,10 @@ public sealed class MainForm : Form
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProgramCount", HeaderText = "Programas", Width = 90, ReadOnly = true });
         grid.RowTemplate.Height = 32;
 
-        grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) OnEditInstance(this, EventArgs.Empty); };
+        // Double-click installs the selected instance; editing has its own
+        // explicit menu entry. The row is already selected by the first of
+        // the two clicks (FullRowSelect selects on mouse-down).
+        grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) OnInstallInstance(this, EventArgs.Empty); };
         grid.CurrentCellDirtyStateChanged += (_, _) =>
         {
             if (grid.IsCurrentCellDirty) grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
@@ -296,7 +326,8 @@ public sealed class MainForm : Form
             var card = InstanceCardControl.ForInstance(instance, count, _folder);
             card.Selected = card.InstanceId == _selectedInstanceId;
             card.Click += (_, _) => SelectCard(card.InstanceId);
-            card.DoubleClick += (_, _) => { SelectCard(card.InstanceId); OnEditInstance(this, EventArgs.Empty); };
+            // Double-click installs; editing has its own explicit menu entry.
+            card.DoubleClick += (_, _) => { SelectCard(card.InstanceId); OnInstallInstance(this, EventArgs.Empty); };
             flow.Controls.Add(card);
         }
 
@@ -465,5 +496,20 @@ public sealed class MainForm : Form
 
         using var installForm = new InstallInstanceForm(_folder, row.Instance, resolved);
         installForm.ShowDialog(this);
+    }
+
+    private void OnInstallMultiple(object? sender, EventArgs e)
+    {
+        if (!EnsureFolderSelected()) return;
+
+        if (_manifest.Instances.Count == 0)
+        {
+            MessageBox.Show(this, "Todavía no hay ninguna instancia creada.", "Nada que instalar",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var multiForm = new MultiInstallInstancesForm(_folder, _manifest);
+        multiForm.ShowDialog(this);
     }
 }

@@ -47,7 +47,7 @@ public sealed class InstallProgressForm : Form
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(10) };
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 45));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 55));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
@@ -78,10 +78,20 @@ public sealed class InstallProgressForm : Form
 
         var progressPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
         progressPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        progressPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        // Fixed width instead of AutoSize: an AutoSize column only re-fits
+        // itself on some layout passes, so it could stay sized for the
+        // short initial "0 / N" and clip the much longer final
+        // "Terminado: X/Y correctos." text that lands in the same label.
+        progressPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 200));
         _progressBar = new ProgressBar { Dock = DockStyle.Fill, Minimum = 0, Maximum = Math.Max(1, _entries.Count) };
         progressPanel.Controls.Add(_progressBar, 0, 0);
-        _progressLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Right, Margin = new Padding(8, 4, 0, 0), Text = $"0 / {_entries.Count}" };
+        _progressLabel = new Label
+        {
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleRight,
+            Margin = new Padding(8, 0, 0, 0),
+            Text = $"0 / {_entries.Count}",
+        };
         progressPanel.Controls.Add(_progressLabel, 1, 0);
         root.Controls.Add(progressPanel, 0, 1);
 

@@ -86,6 +86,9 @@ public static class InstanceIconCatalog
     /// <summary>Builds the IconKey for a custom icon file already saved under CustomTheme.</summary>
     public static string CustomKey(string fileName) => CustomKeyPrefix + fileName;
 
+    /// <summary>True when an IconKey refers to a custom-uploaded photo rather than a built-in glyph.</summary>
+    public static bool IsCustomKey(string? key) => key is not null && key.StartsWith(CustomKeyPrefix, StringComparison.Ordinal);
+
     /// <summary>
     /// Resolves an instance's IconKey, which is either a built-in key (see
     /// <see cref="Load"/>) or a "custom:filename.png" reference to a file

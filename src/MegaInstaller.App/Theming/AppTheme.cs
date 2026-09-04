@@ -52,6 +52,55 @@ public static class AppTheme
         return button;
     }
 
+    /// <summary>
+    /// A button that shows a dropdown menu below itself instead of firing
+    /// directly - used to group several related actions (e.g. Nueva/Editar/
+    /// Eliminar instancia) behind one button instead of a row of separate ones.
+    /// </summary>
+    public static Button CreateDropdownButton(string text, ContextMenuStrip menu, bool primary = false)
+    {
+        StyleContextMenu(menu);
+        var button = CreateButton($"{text}  ▾", primary);
+        button.Click += (_, _) => menu.Show(button, new Point(0, button.Height + 2));
+        return button;
+    }
+
+    /// <summary>A menu item for a <see cref="CreateDropdownButton"/> menu, themed to match in Modern mode.</summary>
+    public static ToolStripMenuItem CreateMenuItem(string text, EventHandler handler)
+    {
+        var item = new ToolStripMenuItem(text);
+        item.Click += handler;
+        if (IsModern)
+        {
+            item.ForeColor = ModernPalette.TextPrimary;
+        }
+
+        return item;
+    }
+
+    /// <summary>Styles a dropdown menu to match the Modern palette; no-op in Classic, where native rendering is already correct.</summary>
+    private static void StyleContextMenu(ContextMenuStrip menu)
+    {
+        if (!IsModern) return;
+
+        menu.Renderer = new ToolStripProfessionalRenderer(new ModernMenuColorTable());
+        menu.ShowImageMargin = false;
+        menu.Font = new Font(menu.Font.FontFamily, 9.5F);
+    }
+
+    private sealed class ModernMenuColorTable : ProfessionalColorTable
+    {
+        public override Color MenuItemSelected => ModernPalette.AccentSoft;
+        public override Color MenuItemSelectedGradientBegin => ModernPalette.AccentSoft;
+        public override Color MenuItemSelectedGradientEnd => ModernPalette.AccentSoft;
+        public override Color MenuItemBorder => ModernPalette.Accent;
+        public override Color MenuBorder => ModernPalette.Border;
+        public override Color ToolStripDropDownBackground => ModernPalette.Surface;
+        public override Color ImageMarginGradientBegin => ModernPalette.Surface;
+        public override Color ImageMarginGradientMiddle => ModernPalette.Surface;
+        public override Color ImageMarginGradientEnd => ModernPalette.Surface;
+    }
+
     private static Bitmap ScaleIcon(Image source, int size)
     {
         var scaled = new Bitmap(size, size);
