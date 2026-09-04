@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using MegaInstaller.Core.Models;
+using MegaInstaller.Core.Services;
 
 namespace MegaInstaller.App;
 
@@ -49,6 +50,8 @@ public sealed class InstallerRow : INotifyPropertyChanged
 
     public int Order => Entry.Order;
 
+    public string Tags => TagUtils.Join(Entry.Tags);
+
     private string _status = "Pendiente";
 
     public string Status
@@ -71,6 +74,7 @@ public sealed class InstallerRow : INotifyPropertyChanged
         OnPropertyChanged(nameof(RunAsAdmin));
         OnPropertyChanged(nameof(Order));
         OnPropertyChanged(nameof(Enabled));
+        OnPropertyChanged(nameof(Tags));
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

@@ -109,10 +109,10 @@ public sealed class EditInstanceForm : Form
     {
         var box = new PictureBox
         {
-            Width = 36,
-            Height = 36,
+            Width = 40,
+            Height = 40,
             Margin = new Padding(3),
-            SizeMode = PictureBoxSizeMode.CenterImage,
+            SizeMode = PictureBoxSizeMode.Zoom,
             BorderStyle = BorderStyle.FixedSingle,
             Image = key is null ? null : InstanceIconCatalog.Load(key),
             Tag = key,

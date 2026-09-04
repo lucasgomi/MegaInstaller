@@ -43,7 +43,8 @@ public class ManifestServiceTests : IDisposable
                     RunAsAdmin = true,
                     Enabled = true,
                     Order = 5,
-                    Notes = "instalado desde el hub"
+                    Notes = "instalado desde el hub",
+                    Tags = { "compresion", "utilidad" },
                 }
             }
         };
@@ -60,6 +61,7 @@ public class ManifestServiceTests : IDisposable
         Assert.Equal(@"C:\Apps\7-Zip", entry.TargetInstallDir);
         Assert.True(entry.RunAsAdmin);
         Assert.Equal(5, entry.Order);
+        Assert.Equal(new[] { "compresion", "utilidad" }, entry.Tags);
     }
 
     [Fact]

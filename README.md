@@ -33,7 +33,9 @@ los instala en lote, de forma automática y silenciosa cuando es posible.
 - **Editor de programas** (botón "Editor de programas..." desde Inicio): la
   biblioteca completa de instaladores de esa carpeta - añadir, editar,
   detectar tipo, quitar, o instalar programas sueltos sin pasar por una
-  instancia.
+  instancia. Tiene un buscador (por nombre, archivo o tag) y un botón
+  "Editar marcados..." para cambiar de golpe argumentos, administrador,
+  orden o tags de todos los programas con la casilla marcada.
 
 ## Cómo funciona
 
@@ -64,6 +66,7 @@ Ejemplo de `megainstaller.json`:
       "enabled": true,
       "order": 10,
       "notes": "",
+      "tags": ["compresion", "utilidad"],
       "addedUtc": "2026-01-01T12:00:00Z"
     }
   ],
@@ -85,6 +88,10 @@ Una instancia solo guarda una lista de `installerIds` que apuntan a
 elementos de `items` - añadir el mismo instalador a varias instancias no
 duplica nada. Puedes editar este archivo a mano si lo prefieres;
 MegaInstaller lo vuelve a leer la próxima vez que abras esa carpeta.
+
+Los `tags` son independientes de las instancias: sirven para organizar o
+buscar programas dentro del Editor (por ejemplo "dev", "juegos"), sin que
+eso implique que vayan a instalarse juntos - para eso están las instancias.
 
 ### Detección de tipo de instalador y flags silenciosos
 

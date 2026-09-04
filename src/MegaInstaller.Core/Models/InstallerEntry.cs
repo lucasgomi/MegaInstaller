@@ -43,5 +43,12 @@ public sealed class InstallerEntry
 
     public string Notes { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Free-form labels for organizing the library independently of
+    /// instance membership (e.g. "dev", "media"). Matched by the search
+    /// box in the installer library.
+    /// </summary>
+    public List<string> Tags { get; set; } = new();
+
     public DateTime AddedUtc { get; set; } = DateTime.UtcNow;
 }

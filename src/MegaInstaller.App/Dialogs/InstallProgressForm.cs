@@ -62,7 +62,9 @@ public sealed class InstallProgressForm : Form
             DataSource = _rows,
         };
         GridStyle.Apply(_grid);
-        _grid.Columns.Add(new DataGridViewImageColumn { DataPropertyName = "Icon", HeaderText = "", Width = 32, ImageLayout = DataGridViewImageCellLayout.Zoom });
+        var iconColumn = new DataGridViewImageColumn { DataPropertyName = "Icon", HeaderText = "", Width = 32, ImageLayout = DataGridViewImageCellLayout.Zoom };
+        GridStyle.ApplyIconColumn(iconColumn);
+        _grid.Columns.Add(iconColumn);
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "Nombre", Width = 210 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "FileName", HeaderText = "Archivo", Width = 190 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Type", HeaderText = "Tipo", Width = 90 });
