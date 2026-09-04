@@ -7,10 +7,13 @@ namespace MegaInstaller.App;
 /// <summary>Thin, bindable wrapper around an <see cref="InstanceDefinition"/> for the Home grid.</summary>
 public sealed class InstanceRow : INotifyPropertyChanged
 {
-    public InstanceRow(InstanceDefinition instance, int programCount)
+    private readonly string _folder;
+
+    public InstanceRow(InstanceDefinition instance, int programCount, string folder)
     {
         Instance = instance;
         ProgramCount = programCount;
+        _folder = folder;
     }
 
     public InstanceDefinition Instance { get; }
@@ -39,7 +42,7 @@ public sealed class InstanceRow : INotifyPropertyChanged
 
     public int ProgramCount { get; }
 
-    public Image? Icon => InstanceIconCatalog.Load(Instance.IconKey);
+    public Image? Icon => InstanceIconCatalog.LoadForInstance(Instance.IconKey, _folder);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

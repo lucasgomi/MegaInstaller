@@ -12,6 +12,7 @@ public sealed class EditInstanceForm : Form
 {
     private readonly InstanceDefinition _instance;
     private readonly IReadOnlyList<InstallerEntry> _allInstallers;
+    private readonly string _folder;
 
     private readonly TextBox _nameBox;
     private readonly TextBox _descriptionBox;
@@ -25,10 +26,11 @@ public sealed class EditInstanceForm : Form
     private static Color IconSelectedColor => AppTheme.IsModern ? ModernPalette.AccentSoft : Color.FromArgb(204, 228, 247);
     private static Color IconUnselectedColor => AppTheme.IsModern ? ModernPalette.Surface : SystemColors.Control;
 
-    public EditInstanceForm(InstanceDefinition instance, IReadOnlyList<InstallerEntry> allInstallers)
+    public EditInstanceForm(InstanceDefinition instance, IReadOnlyList<InstallerEntry> allInstallers, string folder)
     {
         _instance = instance;
         _allInstallers = allInstallers;
+        _folder = folder;
         _selectedIconKey = instance.IconKey;
         _selectedColorHex = instance.ColorHex;
 
@@ -37,7 +39,7 @@ public sealed class EditInstanceForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(460, 666);
+        ClientSize = new Size(460, 694);
 
         var layout = new TableLayoutPanel
         {
@@ -57,7 +59,7 @@ public sealed class EditInstanceForm : Form
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         Controls.Add(layout);
@@ -115,20 +117,31 @@ public sealed class EditInstanceForm : Form
     private FlowLayoutPanel BuildIconPicker()
     {
         var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, BorderStyle = BorderStyle.FixedSingle };
-
-        var noneButton = MakeIconButton(null, "Sin icono");
-        panel.Controls.Add(noneButton);
-
-        foreach (var (key, displayName) in InstanceIconCatalog.Icons)
-        {
-            panel.Controls.Add(MakeIconButton(key, displayName));
-        }
-
-        HighlightSelectedIcon(panel);
+        PopulateIconPicker(panel);
         return panel;
     }
 
-    private PictureBox MakeIconButton(string? key, string displayName)
+    private void PopulateIconPicker(FlowLayoutPanel panel)
+    {
+        panel.Controls.Add(MakeIconButton(null, "Sin icono", null));
+
+        foreach (var (key, displayName) in InstanceIconCatalog.Icons)
+        {
+            panel.Controls.Add(MakeIconButton(key, displayName, InstanceIconCatalog.Load(key)));
+        }
+
+        foreach (var fileName in InstanceIconCatalog.ListCustomIcons(_folder))
+        {
+            var key = InstanceIconCatalog.CustomKey(fileName);
+            panel.Controls.Add(MakeIconButton(key, "Icono personalizado", InstanceIconCatalog.LoadForInstance(key, _folder)));
+        }
+
+        panel.Controls.Add(MakeUploadTile());
+
+        HighlightSelectedIcon(panel);
+    }
+
+    private PictureBox MakeIconButton(string? key, string displayName, Image? image)
     {
         var box = new PictureBox
         {
@@ -137,7 +150,7 @@ public sealed class EditInstanceForm : Form
             Margin = new Padding(3),
             SizeMode = PictureBoxSizeMode.Zoom,
             BorderStyle = BorderStyle.FixedSingle,
-            Image = key is null ? null : InstanceIconCatalog.Load(key),
+            Image = image,
             Tag = key,
             Cursor = Cursors.Hand,
         };
@@ -148,6 +161,73 @@ public sealed class EditInstanceForm : Form
             HighlightSelectedIcon(_iconPicker);
         };
         return box;
+    }
+
+    private Control MakeUploadTile()
+    {
+        var tile = new PictureBox
+        {
+            Width = 40,
+            Height = 40,
+            Margin = new Padding(3),
+            BorderStyle = BorderStyle.FixedSingle,
+            Cursor = Cursors.Hand,
+            Tag = "__upload__",
+        };
+        tile.Paint += (_, e) =>
+        {
+            using var pen = new Pen(SystemColors.GrayText, 1.5f);
+            e.Graphics.DrawLine(pen, tile.Width / 2, 8, tile.Width / 2, tile.Height - 8);
+            e.Graphics.DrawLine(pen, 8, tile.Height / 2, tile.Width - 8, tile.Height / 2);
+        };
+        _toolTip.SetToolTip(tile, "Subir imagen...");
+        tile.Click += OnUploadCustomIcon;
+        return tile;
+    }
+
+    private void OnUploadCustomIcon(object? sender, EventArgs e)
+    {
+        using var openDialog = new OpenFileDialog
+        {
+            Title = "Selecciona una imagen para el icono",
+            Filter = "Imágenes (*.png;*.jpg;*.jpeg;*.bmp;*.gif)|*.png;*.jpg;*.jpeg;*.bmp;*.gif|Todos los archivos (*.*)|*.*",
+        };
+        if (openDialog.ShowDialog(this) != DialogResult.OK)
+        {
+            return;
+        }
+
+        Image source;
+        try
+        {
+            var bytes = File.ReadAllBytes(openDialog.FileName);
+            using var stream = new MemoryStream(bytes);
+            source = Image.FromStream(stream);
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, "No se pudo abrir esa imagen.", "Error al cargar", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        using (source)
+        using (var cropForm = new ImageCropForm(source))
+        {
+            if (cropForm.ShowDialog(this) != DialogResult.OK || cropForm.Result is null)
+            {
+                return;
+            }
+
+            using var cropped = cropForm.Result;
+            var directory = Path.Combine(_folder, InstanceIconCatalog.CustomThemeFolderName);
+            Directory.CreateDirectory(directory);
+            var fileName = $"{Guid.NewGuid():N}.png";
+            cropped.Save(Path.Combine(directory, fileName), System.Drawing.Imaging.ImageFormat.Png);
+
+            _selectedIconKey = InstanceIconCatalog.CustomKey(fileName);
+            _iconPicker.Controls.Clear();
+            PopulateIconPicker(_iconPicker);
+        }
     }
 
     private void HighlightSelectedIcon(FlowLayoutPanel panel)
@@ -169,6 +249,8 @@ public sealed class EditInstanceForm : Form
             panel.Controls.Add(MakeColorSwatch(hex, hex));
         }
 
+        panel.Controls.Add(MakeCustomColorSwatch());
+
         return panel;
     }
 
@@ -180,13 +262,16 @@ public sealed class EditInstanceForm : Form
             Width = 34,
             Height = 34,
             Margin = new Padding(3),
-            BackColor = color ?? SystemColors.ControlLightLight,
-            Tag = hex,
             Cursor = Cursors.Hand,
         };
         swatch.Paint += (_, e) =>
         {
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (var fillBrush = new SolidBrush(color ?? SystemColors.ControlLightLight))
+            {
+                e.Graphics.FillRectangle(fillBrush, 0, 0, swatch.Width, swatch.Height);
+            }
+
             if (color is null)
             {
                 using var crossPen = new Pen(SystemColors.GrayText, 1.5f);
@@ -205,6 +290,45 @@ public sealed class EditInstanceForm : Form
             foreach (Control sibling in _colorPicker.Controls)
             {
                 sibling.Invalidate();
+            }
+        };
+        return swatch;
+    }
+
+    private Control MakeCustomColorSwatch()
+    {
+        var swatch = new Panel { Width = 34, Height = 34, Margin = new Padding(3), Cursor = Cursors.Hand };
+        swatch.Paint += (_, e) =>
+        {
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            var isCustomActive = _selectedColorHex is not null && !InstanceColorPalette.Colors.Contains(_selectedColorHex);
+            var fill = isCustomActive ? InstanceColorPalette.Resolve(_selectedColorHex, SystemColors.ControlLightLight) : SystemColors.ControlLightLight;
+            using (var brush = new SolidBrush(fill))
+            {
+                e.Graphics.FillRectangle(brush, 0, 0, swatch.Width, swatch.Height);
+            }
+
+            if (!isCustomActive)
+            {
+                using var pen = new Pen(SystemColors.GrayText, 1.5f);
+                e.Graphics.DrawLine(pen, swatch.Width / 2, 8, swatch.Width / 2, swatch.Height - 8);
+                e.Graphics.DrawLine(pen, 8, swatch.Height / 2, swatch.Width - 8, swatch.Height / 2);
+            }
+
+            using var borderPen = new Pen(isCustomActive ? SystemColors.WindowText : Color.FromArgb(60, SystemColors.WindowText), isCustomActive ? 2.5f : 1f);
+            e.Graphics.DrawRectangle(borderPen, 0, 0, swatch.Width - 1, swatch.Height - 1);
+        };
+        _toolTip.SetToolTip(swatch, "Personalizado...");
+        swatch.Click += (_, _) =>
+        {
+            using var dialog = new ColorDialog { FullOpen = true, Color = InstanceColorPalette.Resolve(_selectedColorHex, ModernPalette.Accent) };
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                _selectedColorHex = ColorTranslator.ToHtml(dialog.Color);
+                foreach (Control sibling in _colorPicker.Controls)
+                {
+                    sibling.Invalidate();
+                }
             }
         };
         return swatch;

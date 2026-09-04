@@ -31,9 +31,10 @@ public sealed class InstallerLibraryForm : Form
         _folder = folder;
 
         Text = $"Editor de programas - {folder}";
+        FormBorderStyle = FormBorderStyle.FixedSingle;
+        MaximizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(1040, 640);
-        MinimumSize = new Size(780, 440);
 
         _manifest = LoadManifest();
 

@@ -48,7 +48,7 @@ public sealed class InstallInstanceForm : Form
             ? $"{resolvedEntries.Count} programa(s) en esta instancia."
             : $"{instance.Description}\n{resolvedEntries.Count} programa(s) en esta instancia.";
         var headerPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false };
-        var icon = InstanceIconCatalog.Load(instance.IconKey);
+        var icon = InstanceIconCatalog.LoadForInstance(instance.IconKey, folder);
         if (icon is not null)
         {
             headerPanel.Controls.Add(new PictureBox

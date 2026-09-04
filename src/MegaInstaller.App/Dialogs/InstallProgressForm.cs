@@ -38,9 +38,10 @@ public sealed class InstallProgressForm : Form
         _stopOnError = stopOnError;
 
         Text = "Instalando...";
+        FormBorderStyle = FormBorderStyle.FixedSingle;
+        MaximizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
         ClientSize = new Size(720, 560);
-        MinimumSize = new Size(560, 400);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(10) };
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 45));

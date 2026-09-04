@@ -36,7 +36,11 @@ public sealed class MainForm : Form
         Text = "MegaInstaller";
         Width = 900;
         Height = 620;
-        MinimumSize = new Size(700, 420);
+        // Fixed size rather than resizable: the header and card gallery
+        // aren't laid out to reflow at arbitrary widths, and a shrunk
+        // window clipped controls instead of adapting to them.
+        FormBorderStyle = FormBorderStyle.FixedSingle;
+        MaximizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         Icon = LoadAppIcon();
 
@@ -242,7 +246,7 @@ public sealed class MainForm : Form
         var rows = new BindingList<InstanceRow>(
             _manifest.Instances
                 .OrderBy(i => i.Order)
-                .Select(i => new InstanceRow(i, InstanceService.ResolveInstallers(_manifest, i).Count))
+                .Select(i => new InstanceRow(i, InstanceService.ResolveInstallers(_manifest, i).Count, _folder))
                 .ToList());
         _grid!.DataSource = rows;
     }
@@ -256,7 +260,7 @@ public sealed class MainForm : Form
         foreach (var instance in _manifest.Instances.OrderBy(i => i.Order))
         {
             var count = InstanceService.ResolveInstallers(_manifest, instance).Count;
-            var card = InstanceCardControl.ForInstance(instance, count);
+            var card = InstanceCardControl.ForInstance(instance, count, _folder);
             card.Selected = card.InstanceId == _selectedInstanceId;
             card.Click += (_, _) => SelectCard(card.InstanceId);
             card.DoubleClick += (_, _) => { SelectCard(card.InstanceId); OnEditInstance(this, EventArgs.Empty); };
@@ -300,7 +304,7 @@ public sealed class MainForm : Form
             var instance = _selectedInstanceId is null
                 ? null
                 : _manifest.Instances.FirstOrDefault(i => i.Id == _selectedInstanceId);
-            return instance is null ? null : new InstanceRow(instance, InstanceService.ResolveInstallers(_manifest, instance).Count);
+            return instance is null ? null : new InstanceRow(instance, InstanceService.ResolveInstallers(_manifest, instance).Count, _folder);
         }
 
         return _grid!.SelectedRows.Cast<DataGridViewRow>().Select(r => r.DataBoundItem as InstanceRow).FirstOrDefault();
@@ -352,7 +356,7 @@ public sealed class MainForm : Form
         if (!EnsureFolderSelected()) return;
 
         var instance = new InstanceDefinition { Order = (_manifest.Instances.Count + 1) * 10 };
-        using var editForm = new EditInstanceForm(instance, _manifest.Items);
+        using var editForm = new EditInstanceForm(instance, _manifest.Items, _folder);
         if (editForm.ShowDialog(this) != DialogResult.OK) return;
 
         _manifest.Instances.Add(instance);
@@ -371,7 +375,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        using var editForm = new EditInstanceForm(row.Instance, _manifest.Items);
+        using var editForm = new EditInstanceForm(row.Instance, _manifest.Items, _folder);
         if (editForm.ShowDialog(this) == DialogResult.OK)
         {
             SaveManifest();

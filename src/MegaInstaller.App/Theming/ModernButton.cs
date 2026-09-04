@@ -15,7 +15,6 @@ public sealed class ModernButton : Button
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
         FlatStyle = FlatStyle.Flat;
         FlatAppearance.BorderSize = 0;
-        BackColor = Color.Transparent;
         Cursor = Cursors.Hand;
         Padding = new Padding(10, 4, 10, 4);
         MinimumSize = new Size(0, 30);
@@ -35,9 +34,19 @@ public sealed class ModernButton : Button
 
     protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
 
+    // Painting is fully custom (see OnPaint), so the default background fill
+    // is skipped entirely - a plain Control combined with
+    // ControlStyles.OptimizedDoubleBuffer renders a transparent BackColor as
+    // solid black instead of actually showing the parent through, which is
+    // what produced black-looking corners outside the rounded button shape.
+    protected override void OnPaintBackground(PaintEventArgs pevent)
+    {
+    }
+
     protected override void OnPaint(PaintEventArgs pevent)
     {
         var g = pevent.Graphics;
+        g.Clear(Parent?.BackColor ?? SystemColors.Control);
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.InterpolationMode = InterpolationMode.HighQualityBicubic;
 
