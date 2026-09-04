@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using MegaInstaller.App.Dialogs;
+using MegaInstaller.App.Theming;
 using MegaInstaller.Core.Exceptions;
 using MegaInstaller.Core.Models;
 using MegaInstaller.Core.Services;
@@ -11,6 +12,11 @@ namespace MegaInstaller.App;
 /// MegaInstaller is built around. The full installer library (add/edit/
 /// remove individual programs) lives one click away, in
 /// <see cref="InstallerLibraryForm"/>.
+///
+/// Renders one of two ways depending on <see cref="AppTheme.IsModern"/>:
+/// a classic DataGridView, or a card gallery (<see cref="_cardsFlow"/>).
+/// Exactly one of <see cref="_grid"/>/<see cref="_cardsFlow"/> is built,
+/// matching the theme in effect for this whole run.
 /// </summary>
 public sealed class MainForm : Form
 {
@@ -19,8 +25,10 @@ public sealed class MainForm : Form
 
     private InstallerManifest _manifest = new();
     private string _folder = string.Empty;
+    private string? _selectedInstanceId;
 
-    private readonly DataGridView _grid;
+    private readonly DataGridView? _grid;
+    private readonly FlowLayoutPanel? _cardsFlow;
     private readonly ToolTip _toolTip = new();
 
     public MainForm()
@@ -38,7 +46,14 @@ public sealed class MainForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         Controls.Add(root);
 
-        var headerPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Padding = new Padding(10, 6, 10, 6), BackColor = Color.FromArgb(240, 243, 247) };
+        var headerPanel = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 3,
+            RowCount = 1,
+            Padding = new Padding(10, 6, 10, 6),
+            BackColor = AppTheme.IsModern ? ModernPalette.Surface : Color.FromArgb(240, 243, 247),
+        };
         headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         headerPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -52,12 +67,13 @@ public sealed class MainForm : Form
             Text = "MegaInstaller",
             AutoSize = true,
             Font = new Font(Font.FontFamily, 13F, FontStyle.Bold),
+            ForeColor = AppTheme.IsModern ? ModernPalette.TextPrimary : SystemColors.ControlText,
             Anchor = AnchorStyles.Left,
             Margin = new Padding(0, 6, 0, 0),
         }, 1, 0);
         var settingsButton = MakeButton("⚙ Ajustes", OnOpenSettings);
         settingsButton.Anchor = AnchorStyles.Right;
-        _toolTip.SetToolTip(settingsButton, "Cambiar la carpeta de instaladores");
+        _toolTip.SetToolTip(settingsButton, "Cambiar la carpeta de instaladores y el aspecto de la app");
         headerPanel.Controls.Add(settingsButton, 2, 0);
         root.Controls.Add(headerPanel, 0, 0);
 
@@ -65,15 +81,24 @@ public sealed class MainForm : Form
         actionsPanel.Controls.Add(MakeButton("Nueva instancia...", OnNewInstance));
         actionsPanel.Controls.Add(MakeButton("Editar instancia...", OnEditInstance));
         actionsPanel.Controls.Add(MakeButton("Eliminar instancia", OnRemoveInstance));
-        actionsPanel.Controls.Add(MakeButton("Instalar instancia...", OnInstallInstance));
+        actionsPanel.Controls.Add(MakeButton("Instalar instancia...", OnInstallInstance, primary: true));
         var libraryButton = MakeButton("Editor de programas...", OnOpenLibrary);
         libraryButton.Margin = new Padding(40, 4, 4, 4);
         actionsPanel.Controls.Add(libraryButton);
         root.Controls.Add(actionsPanel, 0, 1);
 
-        _grid = BuildGrid();
-        root.Controls.Add(_grid, 0, 2);
+        if (AppTheme.IsModern)
+        {
+            _cardsFlow = BuildCardsHost();
+            root.Controls.Add(_cardsFlow, 0, 2);
+        }
+        else
+        {
+            _grid = BuildGrid();
+            root.Controls.Add(_grid, 0, 2);
+        }
 
+        AppTheme.StyleForm(this);
         Load += (_, _) => EnsureFolderForThisSession();
     }
 
@@ -89,9 +114,9 @@ public sealed class MainForm : Form
         }
     }
 
-    private static Button MakeButton(string text, EventHandler handler)
+    private static Button MakeButton(string text, EventHandler handler, bool primary = false)
     {
-        var button = new Button { Text = text, AutoSize = true, Margin = new Padding(4) };
+        var button = AppTheme.CreateButton(text, primary);
         button.Click += handler;
         return button;
     }
@@ -128,6 +153,16 @@ public sealed class MainForm : Form
 
         return grid;
     }
+
+    private FlowLayoutPanel BuildCardsHost() => new()
+    {
+        Dock = DockStyle.Fill,
+        AutoScroll = true,
+        WrapContents = true,
+        FlowDirection = FlowDirection.LeftToRight,
+        BackColor = ModernPalette.Background,
+        Padding = new Padding(12),
+    };
 
     /// <summary>
     /// Shows the folder picker once per Windows logon session (tracked via
@@ -181,6 +216,7 @@ public sealed class MainForm : Form
         }
 
         _folder = folder;
+        _selectedInstanceId = null;
 
         var settings = _settingsService.Load();
         settings.LastFolder = folder;
@@ -191,15 +227,51 @@ public sealed class MainForm : Form
 
     private void RefreshGrid()
     {
+        if (AppTheme.IsModern)
+        {
+            RefreshCards();
+            return;
+        }
+
         var rows = new BindingList<InstanceRow>(
             _manifest.Instances
                 .OrderBy(i => i.Order)
                 .Select(i => new InstanceRow(i, InstanceService.ResolveInstallers(_manifest, i).Count))
                 .ToList());
-        _grid.DataSource = rows;
+        _grid!.DataSource = rows;
     }
 
-    private IEnumerable<InstanceRow> GridRows => ((BindingList<InstanceRow>?)_grid.DataSource) ?? Enumerable.Empty<InstanceRow>();
+    private void RefreshCards()
+    {
+        var flow = _cardsFlow!;
+        flow.SuspendLayout();
+        flow.Controls.Clear();
+
+        foreach (var instance in _manifest.Instances.OrderBy(i => i.Order))
+        {
+            var count = InstanceService.ResolveInstallers(_manifest, instance).Count;
+            var card = InstanceCardControl.ForInstance(instance, count);
+            card.Selected = card.InstanceId == _selectedInstanceId;
+            card.Click += (_, _) => SelectCard(card.InstanceId);
+            card.DoubleClick += (_, _) => { SelectCard(card.InstanceId); OnEditInstance(this, EventArgs.Empty); };
+            flow.Controls.Add(card);
+        }
+
+        var addCard = InstanceCardControl.CreateAddTile();
+        addCard.Click += (_, _) => OnNewInstance(this, EventArgs.Empty);
+        flow.Controls.Add(addCard);
+
+        flow.ResumeLayout();
+    }
+
+    private void SelectCard(string? instanceId)
+    {
+        _selectedInstanceId = instanceId;
+        foreach (var card in _cardsFlow!.Controls.OfType<InstanceCardControl>())
+        {
+            card.Selected = card.InstanceId == instanceId;
+        }
+    }
 
     private void SaveManifest()
     {
@@ -215,18 +287,44 @@ public sealed class MainForm : Form
         return false;
     }
 
-    private InstanceRow? SelectedRow() =>
-        _grid.SelectedRows.Cast<DataGridViewRow>().Select(r => r.DataBoundItem as InstanceRow).FirstOrDefault();
+    private InstanceRow? SelectedRow()
+    {
+        if (AppTheme.IsModern)
+        {
+            var instance = _selectedInstanceId is null
+                ? null
+                : _manifest.Instances.FirstOrDefault(i => i.Id == _selectedInstanceId);
+            return instance is null ? null : new InstanceRow(instance, InstanceService.ResolveInstallers(_manifest, instance).Count);
+        }
+
+        return _grid!.SelectedRows.Cast<DataGridViewRow>().Select(r => r.DataBoundItem as InstanceRow).FirstOrDefault();
+    }
 
     private void OnOpenSettings(object? sender, EventArgs e)
     {
-        using var settingsForm = new SettingsForm(_folder);
+        var themeBefore = AppTheme.Current;
+        using var settingsForm = new SettingsForm(_folder, themeBefore);
         settingsForm.ShowDialog(this);
 
         if (!string.IsNullOrWhiteSpace(settingsForm.SelectedFolder) &&
             !string.Equals(settingsForm.SelectedFolder, _folder, StringComparison.OrdinalIgnoreCase))
         {
             LoadFolder(settingsForm.SelectedFolder);
+        }
+
+        if (settingsForm.SelectedTheme != themeBefore)
+        {
+            var settings = _settingsService.Load();
+            settings.UiTheme = settingsForm.SelectedTheme;
+            _settingsService.Save(settings);
+
+            var restart = MessageBox.Show(this,
+                "El nuevo aspecto se aplicará al reiniciar MegaInstaller. ¿Reiniciar ahora?",
+                "Reinicio necesario", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            if (restart == DialogResult.Yes)
+            {
+                Application.Restart();
+            }
         }
     }
 
@@ -252,6 +350,7 @@ public sealed class MainForm : Form
         if (editForm.ShowDialog(this) != DialogResult.OK) return;
 
         _manifest.Instances.Add(instance);
+        _selectedInstanceId = instance.Id;
         SaveManifest();
         RefreshGrid();
     }
@@ -290,6 +389,7 @@ public sealed class MainForm : Form
         if (choice != DialogResult.Yes) return;
 
         _manifest.Instances.Remove(row.Instance);
+        if (_selectedInstanceId == row.Instance.Id) _selectedInstanceId = null;
         SaveManifest();
         RefreshGrid();
     }

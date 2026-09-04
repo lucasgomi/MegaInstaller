@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using MegaInstaller.App.Theming;
 using MegaInstaller.Core.Models;
 using MegaInstaller.Core.Services;
 
@@ -94,9 +95,10 @@ public sealed class InstallProgressForm : Form
         root.Controls.Add(_logBox, 0, 3);
 
         var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        _closeButton = new Button { Text = "Cerrar", AutoSize = true, Enabled = false };
+        _closeButton = AppTheme.CreateButton("Cerrar");
+        _closeButton.Enabled = false;
         _closeButton.Click += (_, _) => Close();
-        _cancelButton = new Button { Text = "Detener", AutoSize = true };
+        _cancelButton = AppTheme.CreateButton("Detener", primary: true);
         _cancelButton.Click += (_, _) => _cts?.Cancel();
         buttonsPanel.Controls.Add(_closeButton);
         buttonsPanel.Controls.Add(_cancelButton);
@@ -106,6 +108,7 @@ public sealed class InstallProgressForm : Form
 
         Load += async (_, _) => await RunAsync();
         FormClosing += OnFormClosing;
+        AppTheme.StyleForm(this);
     }
 
     private void OnFormClosing(object? sender, FormClosingEventArgs e)

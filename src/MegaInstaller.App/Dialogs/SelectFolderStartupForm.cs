@@ -1,3 +1,5 @@
+using MegaInstaller.App.Theming;
+
 namespace MegaInstaller.App.Dialogs;
 
 /// <summary>
@@ -52,7 +54,7 @@ public sealed class SelectFolderStartupForm : Form
         folderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         folderPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         _folderTextBox = new TextBox { Dock = DockStyle.Fill, ReadOnly = true, Text = initialFolder ?? string.Empty };
-        var browseButton = new Button { Text = "Examinar...", AutoSize = true };
+        var browseButton = AppTheme.CreateButton("Examinar...");
         browseButton.Click += OnBrowse;
         folderPanel.Controls.Add(_folderTextBox, 0, 0);
         folderPanel.Controls.Add(browseButton, 1, 0);
@@ -66,9 +68,10 @@ public sealed class SelectFolderStartupForm : Form
         }, 1, 2);
 
         var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        var exitButton = new Button { Text = "Salir", AutoSize = true };
+        var exitButton = AppTheme.CreateButton("Salir");
         exitButton.Click += (_, _) => { DialogResult = DialogResult.Cancel; Close(); };
-        _continueButton = new Button { Text = "Continuar", AutoSize = true, Enabled = !string.IsNullOrWhiteSpace(initialFolder) };
+        _continueButton = AppTheme.CreateButton("Continuar", primary: true);
+        _continueButton.Enabled = !string.IsNullOrWhiteSpace(initialFolder);
         _continueButton.Click += OnContinue;
         buttonsPanel.Controls.Add(exitButton);
         buttonsPanel.Controls.Add(_continueButton);
@@ -76,6 +79,8 @@ public sealed class SelectFolderStartupForm : Form
 
         AcceptButton = _continueButton;
         CancelButton = exitButton;
+
+        AppTheme.StyleForm(this);
     }
 
     private void OnBrowse(object? sender, EventArgs e)

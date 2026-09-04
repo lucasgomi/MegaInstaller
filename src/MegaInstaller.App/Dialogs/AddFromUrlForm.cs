@@ -1,3 +1,4 @@
+using MegaInstaller.App.Theming;
 using MegaInstaller.Core.Models;
 using MegaInstaller.Core.Services;
 
@@ -70,8 +71,9 @@ public sealed class AddFromUrlForm : Form
         layout.Controls.Add(_statusLabel, 1, 3);
 
         var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-        _closeButton = new Button { Text = "Cerrar", DialogResult = DialogResult.Cancel, AutoSize = true };
-        _downloadButton = new Button { Text = "Descargar", AutoSize = true };
+        _closeButton = AppTheme.CreateButton("Cerrar");
+        _closeButton.DialogResult = DialogResult.Cancel;
+        _downloadButton = AppTheme.CreateButton("Descargar", primary: true);
         _downloadButton.Click += OnDownloadClick;
         buttonsPanel.Controls.Add(_closeButton);
         buttonsPanel.Controls.Add(_downloadButton);
@@ -79,6 +81,7 @@ public sealed class AddFromUrlForm : Form
 
         CancelButton = _closeButton;
         FormClosing += (_, _) => _cts?.Cancel();
+        AppTheme.StyleForm(this);
     }
 
     private void SuggestNameFromUrl()

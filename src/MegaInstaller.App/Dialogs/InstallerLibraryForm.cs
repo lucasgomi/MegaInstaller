@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using MegaInstaller.App.Theming;
 using MegaInstaller.Core.Exceptions;
 using MegaInstaller.Core.Models;
 using MegaInstaller.Core.Services;
@@ -68,18 +69,19 @@ public sealed class InstallerLibraryForm : Form
         root.Controls.Add(_grid, 0, 2);
 
         var installPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 6, 8, 6) };
-        var installSelectedButton = MakeButton("Instalar seleccionados", OnInstallSelected);
-        var installAllButton = MakeButton("Instalar todo", OnInstallAll);
+        var installSelectedButton = MakeButton("Instalar seleccionados", OnInstallSelected, primary: true);
+        var installAllButton = MakeButton("Instalar todo", OnInstallAll, primary: true);
         _stopOnErrorCheck = new CheckBox { Text = "Detener si falla uno", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(16, 8, 0, 0) };
         installPanel.Controls.AddRange(new Control[] { installSelectedButton, installAllButton, _stopOnErrorCheck });
         root.Controls.Add(installPanel, 0, 3);
 
         RefreshGrid();
+        AppTheme.StyleForm(this);
     }
 
-    private static Button MakeButton(string text, EventHandler handler)
+    private static Button MakeButton(string text, EventHandler handler, bool primary = false)
     {
-        var button = new Button { Text = text, AutoSize = true, Margin = new Padding(4) };
+        var button = AppTheme.CreateButton(text, primary);
         button.Click += handler;
         return button;
     }
