@@ -30,11 +30,12 @@ public sealed class MainForm : Form
     private readonly DataGridView? _grid;
     private readonly FlowLayoutPanel? _cardsFlow;
     private readonly ToolTip _toolTip = new();
+    private bool _updateAvailable;
 
     public MainForm()
     {
         var elevated = ElevationProbe.IsProcessElevated();
-        Text = elevated ? "MegaInstaller - Administrador" : "MegaInstaller";
+        UpdateTitle();
         Width = 900;
         Height = 620;
         // Fixed size rather than resizable: the header and card gallery
@@ -159,7 +160,50 @@ public sealed class MainForm : Form
         }
 
         AppTheme.StyleForm(this);
-        Load += (_, _) => EnsureFolderForThisSession();
+        Load += (_, _) =>
+        {
+            EnsureFolderForThisSession();
+            _ = CheckForUpdateInBackgroundAsync();
+        };
+    }
+
+    private void UpdateTitle()
+    {
+        var parts = new List<string> { "MegaInstaller" };
+        if (ElevationProbe.IsProcessElevated())
+        {
+            parts.Add("Administrador");
+        }
+
+        if (_updateAvailable)
+        {
+            parts.Add("Actualización disponible");
+        }
+
+        Text = string.Join(" - ", parts);
+    }
+
+    /// <summary>
+    /// Silent, best-effort check against GitHub Releases: only ever changes
+    /// the title bar when a genuinely newer version is confirmed, and never
+    /// surfaces an error if GitHub is unreachable - the whole point is to be
+    /// a free bonus on top of a normal launch, not something to depend on.
+    /// </summary>
+    private async Task CheckForUpdateInBackgroundAsync()
+    {
+        try
+        {
+            using var releaseService = new GitHubReleaseService();
+            var latest = await releaseService.GetLatestReleaseAsync(ReleaseInfo.RepoOwner, ReleaseInfo.RepoName, CancellationToken.None);
+            if (latest is not null && ReleaseInfo.IsNewer(latest.TagName))
+            {
+                _updateAvailable = true;
+                UpdateTitle();
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+        }
     }
 
     private static Icon? LoadAppIcon()
