@@ -5,10 +5,12 @@ instaladores (programas descargados o copiados a mano) en una sola carpeta y
 los instala en lote, de forma automática y silenciosa cuando es posible.
 
 - Añade instaladores **copiándolos a la carpeta**, **desde un archivo** o
-  **desde una URL** (con barra de progreso de descarga en tiempo real).
-- Un botón para elegir la carpeta de instaladores.
+  **desde una URL** (con barra de progreso de descarga en tiempo real). Cada
+  uno aparece en la lista con su propio icono (el mismo que muestra Windows).
 - Agrupa instaladores en **instancias** ("packs"): un mismo programa puede
-  pertenecer a varias instancias sin duplicar el archivo ni la carpeta.
+  pertenecer a varias instancias sin duplicar el archivo ni la carpeta, y
+  cada instancia puede llevar un icono propio de un paquete incluido con
+  la aplicación.
 - Instala una instancia entera en **modo fácil** (todo, rutas automáticas) o
   **modo avanzado** (excluye instaladores concretos y/o fuerza una carpeta
   de instalación distinta para esa ejecución), con registro en tiempo real,
@@ -21,8 +23,13 @@ los instala en lote, de forma automática y silenciosa cuando es posible.
 
 ## Pantallas
 
-- **Inicio**: lo primero que ves. Aquí eliges la carpeta de instaladores y
-  gestionas las instancias (crear, editar, eliminar, instalar).
+- **Al abrir la app** (la primera vez en cada sesión de Windows): una
+  ventana para elegir la carpeta de instaladores. Si ya la habías elegido
+  antes en esta misma sesión, MegaInstaller la recuerda y no vuelve a
+  preguntar hasta el siguiente inicio de sesión.
+- **Inicio**: la pantalla principal. Aquí gestionas las instancias (crear,
+  editar, eliminar, instalar); un botón de **Ajustes** en la esquina
+  superior permite cambiar la carpeta de instaladores en cualquier momento.
 - **Editor de programas** (botón "Editor de programas..." desde Inicio): la
   biblioteca completa de instaladores de esa carpeta - añadir, editar,
   detectar tipo, quitar, o instalar programas sueltos sin pasar por una
@@ -65,6 +72,7 @@ Ejemplo de `megainstaller.json`:
       "id": "8a1b2c3d4e...",
       "name": "Pack básico",
       "description": "Lo mínimo para un equipo nuevo",
+      "iconKey": "briefcase-fill",
       "installerIds": ["3f6d9c2a1234..."],
       "order": 10,
       "addedUtc": "2026-01-01T12:00:00Z"
@@ -101,6 +109,16 @@ NSIS; el botón "Insertar carpeta en argumentos" añade el flag correcto
 argumentos. Para InstallShield y tipos desconocidos no se inserta nada
 automáticamente porque no existe un flag universal fiable - hay que añadirlo
 a mano si se conoce.
+
+### Iconos
+
+- **Instaladores**: el icono que se muestra en la lista es el que Windows
+  asocia a ese archivo (el mismo que verías en el Explorador) - se lee del
+  propio `.exe`/`.msi`, no hay que configurar nada.
+- **Instancias**: se eligen de un pequeño paquete de iconos de código
+  abierto incluido con la aplicación ([Bootstrap Icons](https://icons.getbootstrap.com/),
+  licencia MIT - ver `src/MegaInstaller.App/Resources/InstanceIcons/THIRD-PARTY-NOTICES.md`),
+  desde el selector en "Editar instancia".
 
 ### Instalación en lote: orden y concurrencia
 
@@ -189,3 +207,8 @@ tests/
 - El código de salida de un instalador no siempre refleja fielmente si la
   instalación tuvo éxito (algunos "bootstrappers" relanzan otro proceso y
   terminan enseguida); en caso de duda, revisa el registro de instalación.
+- "Cada sesión de Windows" se detecta mediante el id de sesión de Windows
+  del proceso actual; en la inmensa mayoría de los casos esto equivale a
+  "cada vez que inicias sesión en Windows", pero en configuraciones poco
+  habituales (por ejemplo, ciertos escenarios de Escritorio remoto) el id
+  podría reutilizarse y saltarse la ventana de selección.

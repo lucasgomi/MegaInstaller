@@ -83,15 +83,26 @@ public sealed class InstallerLibraryForm : Form
             RowHeadersVisible = false,
             EditMode = DataGridViewEditMode.EditOnKeystrokeOrF2,
         };
+        GridStyle.Apply(grid);
 
         grid.Columns.Add(new DataGridViewCheckBoxColumn { DataPropertyName = "Enabled", HeaderText = "", Width = 30 });
+        grid.Columns.Add(new DataGridViewImageColumn { DataPropertyName = "Icon", HeaderText = "", Width = 32, ImageLayout = DataGridViewImageCellLayout.Zoom });
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "Nombre", Width = 200 });
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "FileName", HeaderText = "Archivo", Width = 180, ReadOnly = true });
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Type", HeaderText = "Tipo", Width = 100, ReadOnly = true });
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Arguments", HeaderText = "Argumentos", Width = 180, ReadOnly = true });
-        grid.Columns.Add(new DataGridViewCheckBoxColumn { DataPropertyName = "RunAsAdmin", HeaderText = "Admin", Width = 55, ReadOnly = true });
-        grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Order", HeaderText = "Orden", Width = 55, ReadOnly = true });
+        grid.Columns.Add(new DataGridViewCheckBoxColumn
+        {
+            DataPropertyName = "RunAsAdmin", HeaderText = "Admin", Width = 55, ReadOnly = true,
+            ToolTipText = "Pide elevación (UAC) al instalar. Como máximo se eleva un instalador a la vez.",
+        });
+        grid.Columns.Add(new DataGridViewTextBoxColumn
+        {
+            DataPropertyName = "Order", HeaderText = "Orden", Width = 55, ReadOnly = true,
+            ToolTipText = "Los instaladores con el mismo Orden se instalan en paralelo; un Orden distinto espera a que termine el anterior.",
+        });
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "Estado", Width = 120, ReadOnly = true });
+        grid.RowTemplate.Height = 30;
 
         grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) OnEdit(this, EventArgs.Empty); };
         grid.CurrentCellDirtyStateChanged += (_, _) =>
@@ -127,7 +138,7 @@ public sealed class InstallerLibraryForm : Form
     private void RefreshGrid()
     {
         var rows = new BindingList<InstallerRow>(
-            _manifest.Items.OrderBy(i => i.Order).Select(i => new InstallerRow(i)).ToList());
+            _manifest.Items.OrderBy(i => i.Order).Select(i => new InstallerRow(i, _folder)).ToList());
         _grid.DataSource = rows;
     }
 

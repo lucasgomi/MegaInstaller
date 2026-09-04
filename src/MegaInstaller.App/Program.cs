@@ -8,6 +8,7 @@ internal static class Program
         Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
+        Application.SetDefaultFont(new Font("Segoe UI", 9F));
         Application.Run(new MainForm());
     }
 }

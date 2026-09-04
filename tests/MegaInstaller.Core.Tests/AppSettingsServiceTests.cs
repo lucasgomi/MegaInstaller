@@ -27,19 +27,19 @@ public class AppSettingsServiceTests : IDisposable
         var settings = new AppSettingsService(_path).Load();
 
         Assert.Null(settings.LastFolder);
-        Assert.False(settings.StopOnError);
+        Assert.Null(settings.LastWindowsSessionId);
     }
 
     [Fact]
     public void SaveThenLoad_RoundTrips()
     {
         var sut = new AppSettingsService(_path);
-        sut.Save(new AppSettings { LastFolder = @"C:\Installers", StopOnError = true });
+        sut.Save(new AppSettings { LastFolder = @"C:\Installers", LastWindowsSessionId = 7 });
 
         var loaded = sut.Load();
 
         Assert.Equal(@"C:\Installers", loaded.LastFolder);
-        Assert.True(loaded.StopOnError);
+        Assert.Equal(7, loaded.LastWindowsSessionId);
     }
 
     [Fact]

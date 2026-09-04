@@ -15,25 +15,31 @@ public sealed class EditInstanceForm : Form
     private readonly TextBox _nameBox;
     private readonly TextBox _descriptionBox;
     private readonly CheckedListBox _installersList;
+    private readonly FlowLayoutPanel _iconPicker;
+    private readonly ToolTip _toolTip = new();
+    private string? _selectedIconKey;
+
+    private static readonly Color IconSelectedColor = Color.FromArgb(204, 228, 247);
 
     public EditInstanceForm(InstanceDefinition instance, IReadOnlyList<InstallerEntry> allInstallers)
     {
         _instance = instance;
         _allInstallers = allInstallers;
+        _selectedIconKey = instance.IconKey;
 
         Text = string.IsNullOrWhiteSpace(instance.Name) ? "Nueva instancia" : $"Editar instancia - {instance.Name}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(460, 480);
+        ClientSize = new Size(460, 610);
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(12),
             ColumnCount = 2,
-            RowCount = 4,
+            RowCount = 5,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -47,7 +53,12 @@ public sealed class EditInstanceForm : Form
         _descriptionBox = new TextBox { Dock = DockStyle.Fill, Text = instance.Description };
         layout.Controls.Add(_descriptionBox, 1, 1);
 
-        layout.Controls.Add(new Label { Text = "Programas:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top }, 0, 2);
+        layout.Controls.Add(new Label { Text = "Icono:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top }, 0, 2);
+        _iconPicker = BuildIconPicker();
+        layout.Controls.Add(_iconPicker, 1, 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 130));
+
+        layout.Controls.Add(new Label { Text = "Programas:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top }, 0, 3);
         _installersList = new CheckedListBox { Dock = DockStyle.Fill, CheckOnClick = true };
         if (_allInstallers.Count == 0)
         {
@@ -62,7 +73,7 @@ public sealed class EditInstanceForm : Form
                 _installersList.Items.Add($"{installer.Name} ({installer.FileName})", isMember);
             }
         }
-        layout.Controls.Add(_installersList, 1, 2);
+        layout.Controls.Add(_installersList, 1, 3);
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
         var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
@@ -71,11 +82,58 @@ public sealed class EditInstanceForm : Form
         okButton.Click += OnSave;
         buttonsPanel.Controls.Add(cancelButton);
         buttonsPanel.Controls.Add(okButton);
-        layout.Controls.Add(buttonsPanel, 0, 3);
+        layout.Controls.Add(buttonsPanel, 0, 4);
         layout.SetColumnSpan(buttonsPanel, 2);
 
         AcceptButton = okButton;
         CancelButton = cancelButton;
+    }
+
+    private FlowLayoutPanel BuildIconPicker()
+    {
+        var panel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoScroll = true, BorderStyle = BorderStyle.FixedSingle };
+
+        var noneButton = MakeIconButton(null, "Sin icono");
+        panel.Controls.Add(noneButton);
+
+        foreach (var (key, displayName) in InstanceIconCatalog.Icons)
+        {
+            panel.Controls.Add(MakeIconButton(key, displayName));
+        }
+
+        HighlightSelectedIcon(panel);
+        return panel;
+    }
+
+    private PictureBox MakeIconButton(string? key, string displayName)
+    {
+        var box = new PictureBox
+        {
+            Width = 36,
+            Height = 36,
+            Margin = new Padding(3),
+            SizeMode = PictureBoxSizeMode.CenterImage,
+            BorderStyle = BorderStyle.FixedSingle,
+            Image = key is null ? null : InstanceIconCatalog.Load(key),
+            Tag = key,
+            Cursor = Cursors.Hand,
+        };
+        _toolTip.SetToolTip(box, displayName);
+        box.Click += (_, _) =>
+        {
+            _selectedIconKey = key;
+            HighlightSelectedIcon(_iconPicker);
+        };
+        return box;
+    }
+
+    private void HighlightSelectedIcon(FlowLayoutPanel panel)
+    {
+        foreach (PictureBox box in panel.Controls)
+        {
+            var key = box.Tag as string;
+            box.BackColor = key == _selectedIconKey ? IconSelectedColor : SystemColors.Control;
+        }
     }
 
     private void OnSave(object? sender, EventArgs e)
@@ -90,6 +148,7 @@ public sealed class EditInstanceForm : Form
 
         _instance.Name = _nameBox.Text.Trim();
         _instance.Description = _descriptionBox.Text.Trim();
+        _instance.IconKey = _selectedIconKey;
 
         if (_allInstallers.Count > 0)
         {

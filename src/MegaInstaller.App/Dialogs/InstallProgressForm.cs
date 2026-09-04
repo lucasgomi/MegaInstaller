@@ -49,7 +49,7 @@ public sealed class InstallProgressForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
         Controls.Add(root);
 
-        _rows = new BindingList<InstallerRow>(_entries.Select(e => new InstallerRow(e)).ToList());
+        _rows = new BindingList<InstallerRow>(_entries.Select(e => new InstallerRow(e, folder)).ToList());
         _grid = new DataGridView
         {
             Dock = DockStyle.Fill,
@@ -61,10 +61,13 @@ public sealed class InstallProgressForm : Form
             SelectionMode = DataGridViewSelectionMode.FullRowSelect,
             DataSource = _rows,
         };
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "Nombre", Width = 220 });
-        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "FileName", HeaderText = "Archivo", Width = 200 });
+        GridStyle.Apply(_grid);
+        _grid.Columns.Add(new DataGridViewImageColumn { DataPropertyName = "Icon", HeaderText = "", Width = 32, ImageLayout = DataGridViewImageCellLayout.Zoom });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Name", HeaderText = "Nombre", Width = 210 });
+        _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "FileName", HeaderText = "Archivo", Width = 190 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Type", HeaderText = "Tipo", Width = 90 });
         _grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "Status", HeaderText = "Estado", Width = 160 });
+        _grid.RowTemplate.Height = 30;
         root.Controls.Add(_grid, 0, 0);
 
         var progressPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2 };
