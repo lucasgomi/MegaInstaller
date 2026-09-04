@@ -22,6 +22,7 @@ public sealed class InstallInstanceForm : Form
     private readonly CheckedListBox _includeList;
     private readonly TextBox _overrideDirBox;
     private readonly CheckBox _stopOnErrorCheck;
+    private readonly CheckBox _elevateCheck;
     private readonly Button _installButton;
 
     public InstallInstanceForm(string folder, InstanceDefinition instance, List<InstallerEntry> resolvedEntries)
@@ -78,8 +79,25 @@ public sealed class InstallInstanceForm : Form
         contentHost.Controls.Add(_advancedPanel);
         root.Controls.Add(contentHost, 0, 2);
 
+        var optionsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false };
         _stopOnErrorCheck = new CheckBox { Text = "Detener si falla uno", AutoSize = true };
-        root.Controls.Add(_stopOnErrorCheck, 0, 3);
+        _elevateCheck = new CheckBox
+        {
+            Text = "Elevar permisos (un solo UAC)",
+            AutoSize = true,
+            Margin = new Padding(20, 3, 3, 3),
+            // Ticked by default exactly when it would help: something in the
+            // pack needs admin and this process doesn't have it yet.
+            Checked = resolvedEntries.Any(e => e.RunAsAdmin) && !ElevationProbe.IsProcessElevated(),
+            Enabled = !ElevationProbe.IsProcessElevated(),
+        };
+        if (ElevationProbe.IsProcessElevated())
+        {
+            _elevateCheck.Text = "Ya se está ejecutando como administrador";
+        }
+        optionsPanel.Controls.Add(_stopOnErrorCheck);
+        optionsPanel.Controls.Add(_elevateCheck);
+        root.Controls.Add(optionsPanel, 0, 3);
 
         var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
         var cancelButton = AppTheme.CreateButton("Cancelar");
@@ -189,6 +207,16 @@ public sealed class InstallInstanceForm : Form
         {
             MessageBox.Show(this, "No hay programas seleccionados para instalar.", "Nada que instalar",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        // Handing the batch to an elevated copy costs one UAC prompt for the
+        // whole run; if that's declined, fall through and install here.
+        if (_elevateCheck.Checked && _elevateCheck.Enabled &&
+            ElevatedInstallLauncher.TryLaunch(this, _folder, plan, _stopOnErrorCheck.Checked))
+        {
+            DialogResult = DialogResult.OK;
+            Close();
             return;
         }
 

@@ -12,6 +12,9 @@ public static class ModernPalette
     public static readonly Color AccentPressed = Color.FromArgb(0x3D, 0x40, 0xC4);
     public static readonly Color AccentSoft = Color.FromArgb(0xEC, 0xEC, 0xFD);
 
+    /// <summary>Gold used for the "running as administrator" marker, dark enough to stay legible on the white header.</summary>
+    public static readonly Color AdminGold = Color.FromArgb(0xC8, 0x8A, 0x00);
+
     public static readonly Color TextPrimary = Color.FromArgb(0x1F, 0x24, 0x2B);
     public static readonly Color TextSecondary = Color.FromArgb(0x6B, 0x72, 0x80);
     public static readonly Color OnAccent = Color.White;

@@ -33,7 +33,8 @@ public sealed class MainForm : Form
 
     public MainForm()
     {
-        Text = "MegaInstaller";
+        var elevated = ElevationProbe.IsProcessElevated();
+        Text = elevated ? "MegaInstaller - Administrador" : "MegaInstaller";
         Width = 900;
         Height = 620;
         // Fixed size rather than resizable: the header and card gallery
@@ -66,17 +67,49 @@ public sealed class MainForm : Form
         var appIcon = InstanceIconCatalog.Load("box-seam-fill");
         if (appIcon is not null)
         {
-            headerPanel.Controls.Add(new PictureBox { Image = appIcon, Width = 28, Height = 28, SizeMode = PictureBoxSizeMode.Zoom, Margin = new Padding(0, 4, 8, 0) }, 0, 0);
+            headerPanel.Controls.Add(new PictureBox
+            {
+                Image = appIcon,
+                Width = 28,
+                Height = 28,
+                SizeMode = PictureBoxSizeMode.Zoom,
+                Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, 0, 8, 0),
+            }, 0, 0);
         }
-        headerPanel.Controls.Add(new Label
+
+        // Title and the admin marker share one font and sit in a single
+        // left-anchored strip, so they're on the same baseline as each other
+        // and vertically centred against the icon and the Ajustes button.
+        var titleFont = new Font(Font.FontFamily, 13F, FontStyle.Bold);
+        var titlePanel = new FlowLayoutPanel
+        {
+            AutoSize = true,
+            WrapContents = false,
+            FlowDirection = FlowDirection.LeftToRight,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(0),
+        };
+        titlePanel.Controls.Add(new Label
         {
             Text = "MegaInstaller",
             AutoSize = true,
-            Font = new Font(Font.FontFamily, 13F, FontStyle.Bold),
+            Font = titleFont,
             ForeColor = AppTheme.IsModern ? ModernPalette.TextPrimary : SystemColors.ControlText,
-            Anchor = AnchorStyles.Left,
-            Margin = new Padding(0, 6, 0, 0),
-        }, 1, 0);
+            Margin = new Padding(0),
+        });
+        if (elevated)
+        {
+            titlePanel.Controls.Add(new Label
+            {
+                Text = "AdminMode",
+                AutoSize = true,
+                Font = titleFont,
+                ForeColor = ModernPalette.AdminGold,
+                Margin = new Padding(10, 0, 0, 0),
+            });
+        }
+        headerPanel.Controls.Add(titlePanel, 1, 0);
         var settingsButton = MakeButton("Ajustes", OnOpenSettings, icon: InstanceIconCatalog.Load("gear-fill"));
         settingsButton.Anchor = AnchorStyles.Right;
         _toolTip.SetToolTip(settingsButton, "Cambiar la carpeta de instaladores y el aspecto de la app");

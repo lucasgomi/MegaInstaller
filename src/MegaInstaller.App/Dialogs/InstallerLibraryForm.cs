@@ -21,6 +21,7 @@ public sealed class InstallerLibraryForm : Form
 
     private readonly DataGridView _grid;
     private readonly CheckBox _stopOnErrorCheck;
+    private readonly CheckBox _elevateCheck;
     private readonly TextBox _searchBox;
     private readonly ToolTip _toolTip = new();
 
@@ -75,7 +76,15 @@ public sealed class InstallerLibraryForm : Form
         var installSelectedButton = MakeButton("Instalar seleccionados", OnInstallSelected, primary: true);
         var installAllButton = MakeButton("Instalar todo", OnInstallAll, primary: true);
         _stopOnErrorCheck = new CheckBox { Text = "Detener si falla uno", AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(16, 8, 0, 0) };
-        installPanel.Controls.AddRange(new Control[] { installSelectedButton, installAllButton, _stopOnErrorCheck });
+        _elevateCheck = new CheckBox
+        {
+            Text = ElevationProbe.IsProcessElevated() ? "Ya se está ejecutando como administrador" : "Elevar permisos (un solo UAC)",
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Margin = new Padding(16, 8, 0, 0),
+            Enabled = !ElevationProbe.IsProcessElevated(),
+        };
+        installPanel.Controls.AddRange(new Control[] { installSelectedButton, installAllButton, _stopOnErrorCheck, _elevateCheck });
         root.Controls.Add(installPanel, 0, 3);
 
         RefreshGrid();
@@ -418,6 +427,14 @@ public sealed class InstallerLibraryForm : Form
         {
             MessageBox.Show(this, "No hay instaladores habilitados para instalar.", "Nada que instalar",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        // One UAC prompt for the whole batch when asked for; if the prompt is
+        // dismissed, TryLaunch returns false and it installs here instead.
+        if (_elevateCheck.Checked && _elevateCheck.Enabled &&
+            ElevatedInstallLauncher.TryLaunch(this, _folder, entries, _stopOnErrorCheck.Checked))
+        {
             return;
         }
 
