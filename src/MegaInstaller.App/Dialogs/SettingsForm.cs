@@ -1,6 +1,7 @@
 using System.Reflection;
 using MegaInstaller.App.Theming;
 using MegaInstaller.Core.Models;
+using MegaInstaller.Core.Services;
 
 namespace MegaInstaller.App.Dialogs;
 
@@ -10,12 +11,18 @@ public sealed class SettingsForm : Form
     private readonly TextBox _folderTextBox;
     private readonly RadioButton _classicRadio;
     private readonly RadioButton _modernRadio;
+    private readonly CheckBox _troubleshooterCheck;
+    private readonly CheckBox _elevationOfferCheck;
 
     public string SelectedFolder { get; private set; }
 
     public UiThemeMode SelectedTheme => _modernRadio.Checked ? UiThemeMode.Modern : UiThemeMode.Classic;
 
-    public SettingsForm(string currentFolder, UiThemeMode currentTheme)
+    public bool TroubleshooterEnabled => _troubleshooterCheck.Checked;
+
+    public bool SkipElevationOffer => !_elevationOfferCheck.Checked;
+
+    public SettingsForm(string currentFolder, UiThemeMode currentTheme, AppSettings settings)
     {
         SelectedFolder = currentFolder;
 
@@ -24,15 +31,18 @@ public sealed class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(560, 250);
+        ClientSize = new Size(560, 380);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 6 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 9 };
         // RowStyles is positional (RowStyles[i] = row i); declare all of
         // them upfront so none fall back to an unpredictable default.
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         Controls.Add(root);
@@ -64,20 +74,42 @@ public sealed class SettingsForm : Form
         themePanel.Controls.Add(_modernRadio);
         root.Controls.Add(themePanel, 0, 3);
 
+        _troubleshooterCheck = new CheckBox
+        {
+            Text = "Activar el diagnóstico de instalación (troubleshooter)",
+            AutoSize = true,
+            Checked = settings.TroubleshooterEnabled,
+        };
+        root.Controls.Add(_troubleshooterCheck, 0, 4);
+
+        _elevationOfferCheck = new CheckBox
+        {
+            Text = "Ofrecer reiniciar como administrador para un solo aviso de UAC",
+            AutoSize = true,
+            Checked = !settings.SkipElevationOffer,
+        };
+        root.Controls.Add(_elevationOfferCheck, 0, 5);
+
+        var elevateNowButton = AppTheme.CreateButton("Reiniciar como administrador ahora");
+        elevateNowButton.Enabled = !ElevationProbe.IsProcessElevated();
+        elevateNowButton.Click += (_, _) => ElevatedRelauncher.TryRelaunchElevated(this);
+        root.Controls.Add(elevateNowButton, 0, 6);
+
         var version = Assembly.GetExecutingAssembly().GetName().Version;
         root.Controls.Add(new Label
         {
-            Text = version is null ? "MegaInstaller" : $"MegaInstaller v{version.Major}.{version.Minor}",
+            Text = (version is null ? "MegaInstaller" : $"MegaInstaller v{version.Major}.{version.Minor}") +
+                   (ElevationProbe.IsProcessElevated() ? " - ejecutándose como administrador" : string.Empty),
             AutoSize = true,
             ForeColor = SystemColors.GrayText,
-            Margin = new Padding(0, 16, 0, 0),
-        }, 0, 4);
+            Margin = new Padding(0, 8, 0, 0),
+        }, 0, 7);
 
         var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
         var closeButton = AppTheme.CreateButton("Cerrar");
         closeButton.DialogResult = DialogResult.OK;
         buttonsPanel.Controls.Add(closeButton);
-        root.Controls.Add(buttonsPanel, 0, 5);
+        root.Controls.Add(buttonsPanel, 0, 8);
 
         AcceptButton = closeButton;
         CancelButton = closeButton;

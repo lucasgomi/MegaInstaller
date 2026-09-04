@@ -24,12 +24,15 @@ public sealed class InstallProgress
 /// Runs installers in ordered "waves" (see <see cref="InstallScheduler"/>):
 /// a wave fully finishes before the next one starts, but entries sharing
 /// the same Order are considered independent and run concurrently for
-/// speed - bounded, and with at most one elevated (RunAsAdmin) install in
-/// flight at a time so UAC prompts never stack. Elevated installs go
-/// through ShellExecute with the "runas" verb, which is the only way
-/// Windows lets a non-admin process trigger a UAC prompt - Windows does
-/// not allow redirecting stdout/stderr for a process launched that way, so
-/// live console output is only available for non-elevated installs.
+/// speed.
+///
+/// Elevation has two modes. When MegaInstaller itself is not elevated, a
+/// RunAsAdmin entry goes through ShellExecute with the "runas" verb - the
+/// only way a non-admin process can raise a UAC prompt - and those are run
+/// one at a time so prompts never stack, with no console redirection
+/// (Windows forbids it for "runas"). When MegaInstaller is already
+/// elevated, children inherit its token: no prompt at all, output stays
+/// readable, and admin installs are free to run concurrently like the rest.
 /// </summary>
 public sealed class InstallService
 {
@@ -37,6 +40,14 @@ public sealed class InstallService
     private const int MsiSuccessRebootInitiated = 1641;
     private const int Win32ErrorCancelled = 1223;
     private const int MaxConcurrentInstalls = 4;
+
+    private readonly bool _runningElevated;
+
+    /// <param name="runningElevated">Overrides the elevation probe; for tests.</param>
+    public InstallService(bool? runningElevated = null)
+    {
+        _runningElevated = runningElevated ?? ElevationProbe.IsProcessElevated();
+    }
 
     public event EventHandler<InstallLogEventArgs>? Log;
 
@@ -52,6 +63,10 @@ public sealed class InstallService
         var results = new List<InstallResult>();
         var completedCounter = new CompletedCounter();
 
+        RaiseLog(_runningElevated
+            ? "MegaInstaller se está ejecutando como administrador: los instaladores heredan la elevación y no habrá más avisos de UAC."
+            : "MegaInstaller no está elevado: cada programa marcado como administrador pedirá su propio UAC, de uno en uno.");
+
         foreach (var wave in waves)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -59,8 +74,11 @@ public sealed class InstallService
             using var adminGate = new SemaphoreSlim(1, 1);
             using var concurrencyGate = new SemaphoreSlim(MaxConcurrentInstalls, MaxConcurrentInstalls);
 
+            // Only serialize the entries that will actually raise a prompt.
+            // Once elevation is inherited there is nothing to stack, so they
+            // go through the regular concurrency gate and the batch is faster.
             var waveTasks = wave.Select(entry => RunGatedAsync(
-                folder, entry, entry.RunAsAdmin ? adminGate : concurrencyGate,
+                folder, entry, NeedsRunAsVerb(entry) ? adminGate : concurrencyGate,
                 completedCounter, total, progress, cancellationToken));
 
             var waveResults = await Task.WhenAll(waveTasks).ConfigureAwait(false);
@@ -118,31 +136,36 @@ public sealed class InstallService
         }
 
         var (fileName, arguments) = InstallCommandBuilder.Build(folder, entry);
+        var needsRunAs = NeedsRunAsVerb(entry);
 
         var startInfo = new ProcessStartInfo
         {
             FileName = fileName,
             Arguments = arguments,
-            UseShellExecute = entry.RunAsAdmin,
-            CreateNoWindow = !entry.RunAsAdmin,
-            RedirectStandardOutput = !entry.RunAsAdmin,
-            RedirectStandardError = !entry.RunAsAdmin,
+            UseShellExecute = needsRunAs,
+            CreateNoWindow = !needsRunAs,
+            RedirectStandardOutput = !needsRunAs,
+            RedirectStandardError = !needsRunAs,
         };
 
-        if (entry.RunAsAdmin)
+        if (needsRunAs)
         {
             startInfo.Verb = "runas";
         }
 
         RaiseLog($"[{entry.Name}] Iniciando: {fileName} {arguments}");
-        if (entry.RunAsAdmin)
+        if (needsRunAs)
         {
             RaiseLog($"[{entry.Name}] Se solicitará elevación (UAC). La salida de la consola no está disponible para procesos elevados.");
+        }
+        else if (entry.RunAsAdmin)
+        {
+            RaiseLog($"[{entry.Name}] Se ejecuta elevado heredando los permisos de MegaInstaller (sin aviso de UAC).");
         }
 
         using var process = new Process { StartInfo = startInfo, EnableRaisingEvents = true };
 
-        if (!entry.RunAsAdmin)
+        if (!needsRunAs)
         {
             process.OutputDataReceived += (_, e) => { if (e.Data is not null) RaiseLog($"[{entry.Name}] {e.Data}"); };
             process.ErrorDataReceived += (_, e) => { if (e.Data is not null) RaiseLog($"[{entry.Name}] {e.Data}"); };
@@ -152,7 +175,7 @@ public sealed class InstallService
         {
             process.Start();
 
-            if (!entry.RunAsAdmin)
+            if (!needsRunAs)
             {
                 process.BeginOutputReadLine();
                 process.BeginErrorReadLine();
@@ -209,6 +232,9 @@ public sealed class InstallService
             RaiseLog($"[{entry.Name}] No se pudo detener el proceso: {ex.Message}");
         }
     }
+
+    /// <summary>An entry only needs the UAC-raising "runas" verb when it wants admin and we don't already have it.</summary>
+    private bool NeedsRunAsVerb(InstallerEntry entry) => entry.RunAsAdmin && !_runningElevated;
 
     private void RaiseLog(string message) => Log?.Invoke(this, new InstallLogEventArgs(message));
 

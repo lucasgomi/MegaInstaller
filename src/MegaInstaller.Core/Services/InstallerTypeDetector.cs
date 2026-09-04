@@ -20,9 +20,12 @@ public static class InstallerTypeDetector
 
     public static InstallerType Detect(string filePath)
     {
-        if (string.Equals(Path.GetExtension(filePath), ".msi", StringComparison.OrdinalIgnoreCase))
+        // Extension is authoritative for the package formats Windows itself
+        // installs (there's no .exe to sniff inside them).
+        var extensionType = DetectByExtension(filePath);
+        if (extensionType is not null)
         {
-            return InstallerType.Msi;
+            return extensionType.Value;
         }
 
         if (!File.Exists(filePath))
@@ -57,6 +60,30 @@ public static class InstallerTypeDetector
             {
                 return InstallerType.InstallShield;
             }
+
+            // Checked after the three above because a Burn bundle or a
+            // Squirrel setup can embed one of them; the outer wrapper is
+            // what actually parses the command line, so it wins only when
+            // no inner family matched.
+            if (Contains(sample, ".wixburn") || Contains(sample, "WixBundleOriginalSource"))
+            {
+                return InstallerType.WixBurn;
+            }
+
+            if (Contains(sample, "SquirrelTemp") || Contains(sample, "Squirrel.Windows"))
+            {
+                return InstallerType.Squirrel;
+            }
+
+            if (Contains(sample, "7-Zip") && Contains(sample, "SFX"))
+            {
+                return InstallerType.SevenZipSfx;
+            }
+
+            if (Contains(sample, "WiseMain") || Contains(sample, "Wise Installation"))
+            {
+                return InstallerType.Wise;
+            }
         }
         catch (IOException)
         {
@@ -65,6 +92,15 @@ public static class InstallerTypeDetector
 
         return InstallerType.Unknown;
     }
+
+    private static InstallerType? DetectByExtension(string filePath) =>
+        Path.GetExtension(filePath).ToLowerInvariant() switch
+        {
+            ".msi" => InstallerType.Msi,
+            ".msix" or ".appx" or ".msixbundle" or ".appxbundle" => InstallerType.Msix,
+            ".msu" => InstallerType.Msu,
+            _ => null,
+        };
 
     private static int ReadFully(Stream stream, byte[] buffer)
     {

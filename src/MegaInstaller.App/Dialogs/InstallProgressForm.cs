@@ -28,6 +28,8 @@ public sealed class InstallProgressForm : Form
     private readonly RichTextBox _logBox;
     private readonly Button _cancelButton;
     private readonly Button _closeButton;
+    private readonly Button _diagnoseButton;
+    private readonly AppSettings _settings = new AppSettingsService(AppSettingsService.DefaultPath).Load();
 
     public IReadOnlyList<InstallResult> Results { get; private set; } = Array.Empty<InstallResult>();
 
@@ -101,15 +103,67 @@ public sealed class InstallProgressForm : Form
         _closeButton.Click += (_, _) => Close();
         _cancelButton = AppTheme.CreateButton("Detener", primary: true);
         _cancelButton.Click += (_, _) => _cts?.Cancel();
+        _diagnoseButton = AppTheme.CreateButton("Diagnóstico...");
+        _diagnoseButton.Visible = false;
+        _diagnoseButton.Click += OnDiagnose;
         buttonsPanel.Controls.Add(_closeButton);
         buttonsPanel.Controls.Add(_cancelButton);
+        buttonsPanel.Controls.Add(_diagnoseButton);
         root.Controls.Add(buttonsPanel, 0, 4);
 
         _installService.Log += (_, e) => AppendLog(e.Message);
 
-        Load += async (_, _) => await RunAsync();
+        Load += async (_, _) =>
+        {
+            OfferSingleElevationIfUseful();
+            await RunAsync();
+        };
         FormClosing += OnFormClosing;
         AppTheme.StyleForm(this);
+    }
+
+    /// <summary>
+    /// A child process inherits its parent's token, so an elevated
+    /// MegaInstaller installs everything without any further UAC prompts.
+    /// Offered before the batch starts, since it means restarting the app.
+    /// </summary>
+    private void OfferSingleElevationIfUseful()
+    {
+        var adminEntries = _entries.Count(e => e.RunAsAdmin);
+        if (adminEntries < 2 || _settings.SkipElevationOffer || ElevationProbe.IsProcessElevated())
+        {
+            return;
+        }
+
+        var choice = MessageBox.Show(this,
+            $"{adminEntries} de estos programas piden permisos de administrador, así que Windows mostrará un aviso de UAC por cada uno.\n\n" +
+            "Si reinicias MegaInstaller como administrador, aceptas el aviso una sola vez y todas las instalaciones lo heredan " +
+            "(además pueden ir en paralelo, así que acaba antes).\n\n" +
+            "¿Reiniciar ahora como administrador? Tendrás que volver a lanzar esta instalación.",
+            "Un solo aviso de administrador", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+
+        if (choice == DialogResult.Yes && ElevatedRelauncher.TryRelaunchElevated(this))
+        {
+            Close();
+        }
+    }
+
+    private void OnDiagnose(object? sender, EventArgs e)
+    {
+        var failures = Results
+            .Where(r => r.Outcome is InstallOutcome.Failed or InstallOutcome.FileNotFound)
+            .Select(r => (Entry: _entries.FirstOrDefault(entry => entry.Id == r.EntryId), Result: r))
+            .Where(pair => pair.Entry is not null)
+            .Select(pair => (Entry: pair.Entry!, pair.Result))
+            .ToList();
+
+        if (failures.Count == 0)
+        {
+            return;
+        }
+
+        using var diagnosticsForm = new InstallDiagnosticsForm(_folder, failures);
+        diagnosticsForm.ShowDialog(this);
     }
 
     private void OnFormClosing(object? sender, FormClosingEventArgs e)
@@ -167,6 +221,9 @@ public sealed class InstallProgressForm : Form
             _installing = false;
             _cancelButton.Enabled = false;
             _closeButton.Enabled = true;
+
+            var hasFailures = Results.Any(r => r.Outcome is InstallOutcome.Failed or InstallOutcome.FileNotFound);
+            _diagnoseButton.Visible = _settings.TroubleshooterEnabled && hasFailures;
         }
     }
 

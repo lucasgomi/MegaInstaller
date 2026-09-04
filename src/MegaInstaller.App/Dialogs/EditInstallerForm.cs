@@ -210,7 +210,7 @@ public sealed class EditInstallerForm : Form
         }
 
         var type = SelectedType;
-        if (type is InstallerType.Unknown or InstallerType.Custom or InstallerType.InstallShield)
+        if (!SilentArgsCatalog.SupportsInstallDir(type))
         {
             MessageBox.Show(this,
                 "Este tipo de instalador no tiene un flag de carpeta destino fiable y universal. " +
