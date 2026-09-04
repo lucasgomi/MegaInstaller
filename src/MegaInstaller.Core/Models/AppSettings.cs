@@ -20,4 +20,15 @@ public sealed class AppSettings
 
     /// <summary>Stops the "restart as administrator to get a single UAC prompt" offer from appearing before a batch.</summary>
     public bool SkipElevationOffer { get; set; }
+
+    /// <summary>
+    /// Where web-sourced installers get downloaded to before running (see
+    /// <see cref="Services.WebInstallerCacheService"/>). Null/blank uses the
+    /// predictable default under %LocalAppData%; set only from the "advanced"
+    /// field in Ajustes.
+    /// </summary>
+    public string? WebCacheFolder { get; set; }
+
+    /// <summary>Whether a batch that downloaded anything from a mirror deletes that cache once it's done installing.</summary>
+    public bool ClearWebCacheAfterInstall { get; set; } = true;
 }

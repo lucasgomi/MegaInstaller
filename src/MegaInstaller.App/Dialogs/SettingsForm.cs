@@ -13,6 +13,8 @@ public sealed class SettingsForm : Form
     private readonly RadioButton _modernRadio;
     private readonly CheckBox _troubleshooterCheck;
     private readonly CheckBox _elevationOfferCheck;
+    private readonly TextBox _webCacheFolderTextBox;
+    private readonly CheckBox _clearWebCacheCheck;
 
     public string SelectedFolder { get; private set; }
 
@@ -21,6 +23,10 @@ public sealed class SettingsForm : Form
     public bool TroubleshooterEnabled => _troubleshooterCheck.Checked;
 
     public bool SkipElevationOffer => !_elevationOfferCheck.Checked;
+
+    public string? WebCacheFolder => string.IsNullOrWhiteSpace(_webCacheFolderTextBox.Text) ? null : _webCacheFolderTextBox.Text.Trim();
+
+    public bool ClearWebCacheAfterInstall => _clearWebCacheCheck.Checked;
 
     public SettingsForm(string currentFolder, UiThemeMode currentTheme, AppSettings settings)
     {
@@ -31,9 +37,9 @@ public sealed class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(560, 380);
+        ClientSize = new Size(560, 464);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 9 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 12 };
         // RowStyles is positional (RowStyles[i] = row i); declare all of
         // them upfront so none fall back to an unpredictable default.
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
@@ -41,6 +47,9 @@ public sealed class SettingsForm : Form
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 24));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 34));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 26));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
@@ -90,10 +99,43 @@ public sealed class SettingsForm : Form
         };
         root.Controls.Add(_elevationOfferCheck, 0, 5);
 
+        root.Controls.Add(new Label { Text = "Caché de descargas web (avanzado):", AutoSize = true }, 0, 6);
+
+        var webCachePanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, AutoSize = true };
+        webCachePanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        webCachePanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        _webCacheFolderTextBox = new TextBox
+        {
+            Dock = DockStyle.Fill,
+            Text = settings.WebCacheFolder ?? string.Empty,
+            PlaceholderText = "Vacío = carpeta predeterminada",
+        };
+        var browseWebCacheButton = AppTheme.CreateButton("Examinar...");
+        browseWebCacheButton.Margin = new Padding(6, 0, 0, 0);
+        browseWebCacheButton.Click += (_, _) =>
+        {
+            using var dialog = new FolderBrowserDialog { Description = "Selecciona la carpeta para las descargas de instaladores web" };
+            if (dialog.ShowDialog(this) == DialogResult.OK)
+            {
+                _webCacheFolderTextBox.Text = dialog.SelectedPath;
+            }
+        };
+        webCachePanel.Controls.Add(_webCacheFolderTextBox, 0, 0);
+        webCachePanel.Controls.Add(browseWebCacheButton, 1, 0);
+        root.Controls.Add(webCachePanel, 0, 7);
+
+        _clearWebCacheCheck = new CheckBox
+        {
+            Text = "Borrar la caché de descargas web al terminar cada instalación",
+            AutoSize = true,
+            Checked = settings.ClearWebCacheAfterInstall,
+        };
+        root.Controls.Add(_clearWebCacheCheck, 0, 8);
+
         var elevateNowButton = AppTheme.CreateButton("Reiniciar como administrador ahora");
         elevateNowButton.Enabled = !ElevationProbe.IsProcessElevated();
         elevateNowButton.Click += (_, _) => ElevatedRelauncher.TryRelaunchElevated(this);
-        root.Controls.Add(elevateNowButton, 0, 6);
+        root.Controls.Add(elevateNowButton, 0, 9);
 
         var version = Assembly.GetExecutingAssembly().GetName().Version;
         root.Controls.Add(new Label
@@ -103,13 +145,13 @@ public sealed class SettingsForm : Form
             AutoSize = true,
             ForeColor = SystemColors.GrayText,
             Margin = new Padding(0, 8, 0, 0),
-        }, 0, 7);
+        }, 0, 10);
 
         var buttonsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
         var closeButton = AppTheme.CreateButton("Cerrar");
         closeButton.DialogResult = DialogResult.OK;
         buttonsPanel.Controls.Add(closeButton);
-        root.Controls.Add(buttonsPanel, 0, 8);
+        root.Controls.Add(buttonsPanel, 0, 11);
 
         AcceptButton = closeButton;
         CancelButton = closeButton;

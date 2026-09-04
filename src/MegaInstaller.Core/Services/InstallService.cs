@@ -56,7 +56,8 @@ public sealed class InstallService
         IEnumerable<InstallerEntry> entries,
         bool stopOnError,
         IProgress<InstallProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? entryFolderOverrides = null)
     {
         var waves = InstallScheduler.GroupIntoWaves(entries);
         var total = waves.Sum(w => w.Count);
@@ -79,7 +80,7 @@ public sealed class InstallService
             // go through the regular concurrency gate and the batch is faster.
             var waveTasks = wave.Select(entry => RunGatedAsync(
                 folder, entry, NeedsRunAsVerb(entry) ? adminGate : concurrencyGate,
-                completedCounter, total, progress, cancellationToken));
+                completedCounter, total, progress, cancellationToken, entryFolderOverrides));
 
             var waveResults = await Task.WhenAll(waveTasks).ConfigureAwait(false);
             results.AddRange(waveResults);
@@ -100,14 +101,15 @@ public sealed class InstallService
         CompletedCounter completedCounter,
         int total,
         IProgress<InstallProgress>? progress,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? entryFolderOverrides)
     {
         await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             progress?.Report(new InstallProgress { Completed = completedCounter.Value, Total = total, Current = entry });
 
-            var result = await InstallOneAsync(folder, entry, cancellationToken).ConfigureAwait(false);
+            var result = await InstallOneAsync(folder, entry, cancellationToken, entryFolderOverrides).ConfigureAwait(false);
 
             progress?.Report(new InstallProgress { Completed = completedCounter.Increment(), Total = total, Current = entry, Result = result });
 
@@ -126,16 +128,27 @@ public sealed class InstallService
         public int Increment() => Interlocked.Increment(ref _value);
     }
 
-    public async Task<InstallResult> InstallOneAsync(string folder, InstallerEntry entry, CancellationToken cancellationToken)
+    public async Task<InstallResult> InstallOneAsync(
+        string folder,
+        InstallerEntry entry,
+        CancellationToken cancellationToken,
+        IReadOnlyDictionary<string, string>? entryFolderOverrides = null)
     {
-        var fullPath = Path.Combine(folder, entry.FileName);
+        // A web-sourced entry (see InstallerEntry.MirrorUrl) has no file
+        // under `folder` at all - the caller downloads it into a cache
+        // folder first and points us at that instead, keyed by entry.Id.
+        var effectiveFolder = entryFolderOverrides is not null && entryFolderOverrides.TryGetValue(entry.Id, out var overrideFolder)
+            ? overrideFolder
+            : folder;
+
+        var fullPath = Path.Combine(effectiveFolder, entry.FileName);
         if (!File.Exists(fullPath))
         {
             RaiseLog($"[{entry.Name}] Archivo no encontrado: {fullPath}");
             return Fail(entry, InstallOutcome.FileNotFound, null, "Archivo no encontrado.");
         }
 
-        var (fileName, arguments) = InstallCommandBuilder.Build(folder, entry);
+        var (fileName, arguments) = InstallCommandBuilder.Build(effectiveFolder, entry);
         var needsRunAs = NeedsRunAsVerb(entry);
 
         var startInfo = new ProcessStartInfo

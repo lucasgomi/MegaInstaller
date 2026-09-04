@@ -58,15 +58,20 @@ public sealed class InstallerLibraryForm : Form
         root.Controls.Add(searchPanel, 0, 0);
 
         var actionsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 4, 8, 4) };
-        var addFileButton = MakeButton("Añadir archivo(s)...", OnAddFile);
-        var addUrlButton = MakeButton("Añadir desde URL...", OnAddFromUrl);
-        var importButton = MakeButton("Importar de la carpeta", OnImportFound);
+
+        var addMenu = new ContextMenuStrip();
+        addMenu.Items.Add(AppTheme.CreateMenuItem("Añadir archivo(s)...", OnAddFile));
+        addMenu.Items.Add(AppTheme.CreateMenuItem("Añadir desde URL...", OnAddFromUrl));
+        addMenu.Items.Add(AppTheme.CreateMenuItem("Añadir instalador web...", OnAddWebInstaller));
+        addMenu.Items.Add(AppTheme.CreateMenuItem("Importar de la carpeta", OnImportFound));
+        actionsPanel.Controls.Add(AppTheme.CreateDropdownButton("Añadir", addMenu, primary: true));
+
         var detectButton = MakeButton("Detectar tipo", OnDetectType);
         var editButton = MakeButton("Editar...", OnEdit);
         var bulkEditButton = MakeButton("Editar marcados...", OnBulkEdit);
         _toolTip.SetToolTip(bulkEditButton, "Edita a la vez los programas con la casilla marcada en la columna izquierda de la tabla.");
         var removeButton = MakeButton("Quitar", OnRemove);
-        actionsPanel.Controls.AddRange(new Control[] { addFileButton, addUrlButton, importButton, detectButton, editButton, bulkEditButton, removeButton });
+        actionsPanel.Controls.AddRange(new Control[] { detectButton, editButton, bulkEditButton, removeButton });
         root.Controls.Add(actionsPanel, 0, 1);
 
         _grid = BuildGrid();
@@ -248,7 +253,7 @@ public sealed class InstallerLibraryForm : Form
             Order = (_manifest.Items.Count + 1) * 10,
         };
 
-        using var editForm = new EditInstallerForm(entry, _manifest.Instances);
+        using var editForm = new EditInstallerForm(entry, _manifest.Instances, _folder);
         editForm.ShowDialog(this);
 
         _manifest.Items.Add(entry);
@@ -273,7 +278,38 @@ public sealed class InstallerLibraryForm : Form
             Order = (_manifest.Items.Count + 1) * 10,
         };
 
-        using var editForm = new EditInstallerForm(entry, _manifest.Instances);
+        using var editForm = new EditInstallerForm(entry, _manifest.Instances, _folder);
+        editForm.ShowDialog(this);
+
+        _manifest.Items.Add(entry);
+        SaveManifest();
+        RefreshGrid();
+    }
+
+    private void OnAddWebInstaller(object? sender, EventArgs e)
+    {
+        using var dialog = new AddWebInstallerForm();
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        if (_manifest.Items.Any(i => string.Equals(i.FileName, dialog.FileName, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(i.MirrorUrl)))
+        {
+            MessageBox.Show(this, $"Ya hay un instalador web con el nombre de archivo \"{dialog.FileName}\".",
+                "Ya existe", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var entry = new InstallerEntry
+        {
+            Name = dialog.EntryName,
+            FileName = dialog.FileName,
+            MirrorUrl = dialog.MirrorUrl,
+            ExpectedSha256 = dialog.PinnedSha256,
+            Type = dialog.SelectedType,
+            Arguments = SilentArgsCatalog.GetSuggestedArguments(dialog.SelectedType),
+            Order = (_manifest.Items.Count + 1) * 10,
+        };
+
+        using var editForm = new EditInstallerForm(entry, _manifest.Instances, _folder);
         editForm.ShowDialog(this);
 
         _manifest.Items.Add(entry);
@@ -341,7 +377,7 @@ public sealed class InstallerLibraryForm : Form
             return;
         }
 
-        using var editForm = new EditInstallerForm(row.Entry, _manifest.Instances);
+        using var editForm = new EditInstallerForm(row.Entry, _manifest.Instances, _folder);
         if (editForm.ShowDialog(this) == DialogResult.OK)
         {
             row.RefreshAll();

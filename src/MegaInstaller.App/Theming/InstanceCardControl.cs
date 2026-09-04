@@ -23,6 +23,7 @@ public sealed class InstanceCardControl : Control
     private readonly Image? _icon;
     private readonly bool _isCustomIcon;
     private readonly int _programCount;
+    private readonly bool _hasWebInstallers;
     private readonly Color _accentColor;
     private readonly bool _isAddTile;
 
@@ -40,7 +41,7 @@ public sealed class InstanceCardControl : Control
         }
     }
 
-    private InstanceCardControl(string? instanceId, string name, string description, Image? icon, bool isCustomIcon, int programCount, Color accentColor, bool isAddTile)
+    private InstanceCardControl(string? instanceId, string name, string description, Image? icon, bool isCustomIcon, int programCount, bool hasWebInstallers, Color accentColor, bool isAddTile)
     {
         InstanceId = instanceId;
         _name = name;
@@ -48,6 +49,7 @@ public sealed class InstanceCardControl : Control
         _icon = icon;
         _isCustomIcon = isCustomIcon;
         _programCount = programCount;
+        _hasWebInstallers = hasWebInstallers;
         _accentColor = accentColor;
         _isAddTile = isAddTile;
 
@@ -57,18 +59,19 @@ public sealed class InstanceCardControl : Control
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
     }
 
-    public static InstanceCardControl ForInstance(InstanceDefinition instance, int programCount, string folder) => new(
+    public static InstanceCardControl ForInstance(InstanceDefinition instance, int programCount, bool hasWebInstallers, string folder) => new(
         instance.Id,
         instance.Name,
         instance.Description,
         InstanceIconCatalog.LoadForInstance(instance.IconKey, folder),
         InstanceIconCatalog.IsCustomKey(instance.IconKey),
         programCount,
+        hasWebInstallers,
         InstanceColorPalette.Resolve(instance.ColorHex, ModernPalette.Accent),
         isAddTile: false);
 
     public static InstanceCardControl CreateAddTile() =>
-        new(null, "Nueva instancia", string.Empty, null, false, 0, ModernPalette.Accent, isAddTile: true);
+        new(null, "Nueva instancia", string.Empty, null, false, 0, false, ModernPalette.Accent, isAddTile: true);
 
     protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
 
@@ -179,7 +182,15 @@ public sealed class InstanceCardControl : Control
         var badgeText = _programCount == 1 ? "1 programa" : $"{_programCount} programas";
         using var badgeFont = new Font(Font.FontFamily, 8F);
         var badgeSize = g.MeasureString(badgeText, badgeFont);
-        var badgeRect = new RectangleF(pad, Height - pad - 20, badgeSize.Width + 14, 20);
+
+        // A small web glyph (never an emoji - it'd clash with every other
+        // instance colour) marks a pack that downloads part of itself at
+        // install time instead of carrying every file locally.
+        const int webIconSize = 11;
+        var webIcon = _hasWebInstallers ? InstanceIconCatalog.Load("globe2") : null;
+        var webIconSlot = webIcon is not null ? webIconSize + 6 : 0;
+
+        var badgeRect = new RectangleF(pad, Height - pad - 20, badgeSize.Width + 14 + webIconSlot, 20);
         using var badgePath = RoundedRect(badgeRect, 10f);
         using (var badgeBrush = new SolidBrush(InstanceColorPalette.Tint(_accentColor)))
         {
@@ -189,6 +200,15 @@ public sealed class InstanceCardControl : Control
         using (var badgeTextBrush = new SolidBrush(_accentColor))
         {
             g.DrawString(badgeText, badgeFont, badgeTextBrush, badgeRect.X + 7, badgeRect.Y + 3);
+        }
+
+        if (webIcon is not null)
+        {
+            var webIconRect = new Rectangle(
+                (int)(badgeRect.X + 7 + badgeSize.Width + 4),
+                (int)(badgeRect.Y + (badgeRect.Height - webIconSize) / 2),
+                webIconSize, webIconSize);
+            g.DrawImage(webIcon, webIconRect);
         }
     }
 

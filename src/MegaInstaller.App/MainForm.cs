@@ -322,8 +322,9 @@ public sealed class MainForm : Form
 
         foreach (var instance in _manifest.Instances.OrderBy(i => i.Order))
         {
-            var count = InstanceService.ResolveInstallers(_manifest, instance).Count;
-            var card = InstanceCardControl.ForInstance(instance, count, _folder);
+            var resolved = InstanceService.ResolveInstallers(_manifest, instance);
+            var hasWebInstallers = resolved.Any(entry => !string.IsNullOrWhiteSpace(entry.MirrorUrl));
+            var card = InstanceCardControl.ForInstance(instance, resolved.Count, hasWebInstallers, _folder);
             card.Selected = card.InstanceId == _selectedInstanceId;
             card.Click += (_, _) => SelectCard(card.InstanceId);
             // Double-click installs; editing has its own explicit menu entry.
@@ -393,6 +394,8 @@ public sealed class MainForm : Form
         settings.TroubleshooterEnabled = settingsForm.TroubleshooterEnabled;
         settings.SkipElevationOffer = settingsForm.SkipElevationOffer;
         settings.UiTheme = settingsForm.SelectedTheme;
+        settings.WebCacheFolder = settingsForm.WebCacheFolder;
+        settings.ClearWebCacheAfterInstall = settingsForm.ClearWebCacheAfterInstall;
         _settingsService.Save(settings);
 
         if (settingsForm.SelectedTheme != themeBefore)

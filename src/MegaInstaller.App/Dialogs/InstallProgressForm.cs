@@ -15,11 +15,16 @@ namespace MegaInstaller.App.Dialogs;
 public sealed class InstallProgressForm : Form
 {
     private readonly InstallService _installService = new();
+    private readonly WebInstallerCacheService _webCacheService = new();
     private readonly string _folder;
     private readonly List<InstallerEntry> _entries;
     private readonly bool _stopOnError;
+    private readonly Dictionary<string, string> _resolvedPaths = new();
+    private readonly HashSet<string> _skippedEntryIds = new();
     private CancellationTokenSource? _cts;
     private bool _installing;
+    private bool _downloading;
+    private bool _usedWebCache;
 
     private readonly DataGridView _grid;
     private readonly BindingList<InstallerRow> _rows;
@@ -130,10 +135,115 @@ public sealed class InstallProgressForm : Form
                 return;
             }
 
+            _cts = new CancellationTokenSource();
+
+            if (!await ResolveWebEntriesAsync())
+            {
+                AppendLog("--- Instalación cancelada. ---");
+                _progressLabel.Text = "Cancelado.";
+                _cancelButton.Enabled = false;
+                _closeButton.Enabled = true;
+                return;
+            }
+
             await RunAsync();
         };
         FormClosing += OnFormClosing;
         AppTheme.StyleForm(this);
+    }
+
+    /// <summary>
+    /// Downloads every web-sourced entry (see <see cref="InstallerEntry.MirrorUrl"/>)
+    /// into the cache folder before anything is installed, verifying its
+    /// pinned hash if it has one. A failed mirror offers retry/skip/abort
+    /// right there rather than surfacing as a generic install failure later.
+    /// Returns false when the whole batch should be abandoned (cancelled or aborted).
+    /// </summary>
+    private async Task<bool> ResolveWebEntriesAsync()
+    {
+        var webEntries = _entries.Where(e => !string.IsNullOrWhiteSpace(e.MirrorUrl)).ToList();
+        if (webEntries.Count == 0)
+        {
+            return true;
+        }
+
+        _downloading = true;
+        _usedWebCache = true;
+        var rowsById = _rows.ToDictionary(r => r.Entry.Id);
+        var cacheFolder = WebInstallerCacheService.ResolveCacheFolder(_settings);
+        _progressBar.Value = 0;
+        _progressBar.Maximum = Math.Max(1, webEntries.Count);
+
+        try
+        {
+            for (var i = 0; i < webEntries.Count; i++)
+            {
+                var entry = webEntries[i];
+                while (true)
+                {
+                    _progressLabel.Text = $"Descargando {i + 1} / {webEntries.Count}";
+                    if (rowsById.TryGetValue(entry.Id, out var row))
+                    {
+                        row.Status = "Descargando...";
+                    }
+                    AppendLog($"[{entry.Name}] Descargando desde {entry.MirrorUrl}...");
+
+                    WebDownloadResult result;
+                    try
+                    {
+                        result = await _webCacheService.DownloadAsync(entry, cacheFolder, null, _cts!.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        return false;
+                    }
+
+                    if (result.Outcome == WebDownloadOutcome.Success)
+                    {
+                        _resolvedPaths[entry.Id] = result.LocalPath!;
+                        AppendLog($"[{entry.Name}] Descarga completada.");
+                        break;
+                    }
+
+                    var problem = result.Outcome == WebDownloadOutcome.HashMismatch
+                        ? "el archivo descargado no coincide con el hash esperado (posible mirror alterado o actualizado)."
+                        : $"no se pudo descargar ({result.ErrorMessage}).";
+                    AppendLog($"[{entry.Name}] Problema con el mirror: {problem}");
+
+                    var choice = MessageBox.Show(this,
+                        $"\"{entry.Name}\": {problem}\n\n" +
+                        "Reintentar: vuelve a intentar la descarga.\n" +
+                        "Ignorar: omite este programa y sigue con el resto.\n" +
+                        "Anular: cancela toda la instalación.",
+                        "Problema con un mirror", MessageBoxButtons.AbortRetryIgnore, MessageBoxIcon.Warning);
+
+                    if (choice == DialogResult.Retry)
+                    {
+                        continue;
+                    }
+
+                    if (choice == DialogResult.Ignore)
+                    {
+                        _skippedEntryIds.Add(entry.Id);
+                        if (row is not null)
+                        {
+                            row.Status = "Omitido (fallo de descarga)";
+                        }
+                        break;
+                    }
+
+                    return false;
+                }
+
+                _progressBar.Value = i + 1;
+            }
+
+            return true;
+        }
+        finally
+        {
+            _downloading = false;
+        }
     }
 
     /// <summary>
@@ -192,13 +302,13 @@ public sealed class InstallProgressForm : Form
             return;
         }
 
-        using var diagnosticsForm = new InstallDiagnosticsForm(_folder, failures);
+        using var diagnosticsForm = new InstallDiagnosticsForm(_folder, failures, _resolvedPaths);
         diagnosticsForm.ShowDialog(this);
     }
 
     private void OnFormClosing(object? sender, FormClosingEventArgs e)
     {
-        if (!_installing)
+        if (!_installing && !_downloading)
         {
             return;
         }
@@ -218,7 +328,11 @@ public sealed class InstallProgressForm : Form
     private async Task RunAsync()
     {
         _installing = true;
-        _cts = new CancellationTokenSource();
+        var entriesToInstall = _entries.Where(e => !_skippedEntryIds.Contains(e.Id)).ToList();
+        _progressBar.Value = 0;
+        _progressBar.Maximum = Math.Max(1, entriesToInstall.Count);
+        _progressLabel.Text = $"0 / {entriesToInstall.Count}";
+
         var rowsById = _rows.ToDictionary(r => r.Entry.Id);
 
         var progress = new Progress<InstallProgress>(p =>
@@ -234,7 +348,7 @@ public sealed class InstallProgressForm : Form
 
         try
         {
-            Results = await _installService.InstallBatchAsync(_folder, _entries, _stopOnError, progress, _cts.Token);
+            Results = await _installService.InstallBatchAsync(_folder, entriesToInstall, _stopOnError, progress, _cts!.Token, _resolvedPaths);
 
             var succeeded = Results.Count(r => r.Outcome is InstallOutcome.Success or InstallOutcome.SuccessRebootRequired);
             var rebootNeeded = Results.Any(r => r.Outcome == InstallOutcome.SuccessRebootRequired);
@@ -251,6 +365,11 @@ public sealed class InstallProgressForm : Form
             _installing = false;
             _cancelButton.Enabled = false;
             _closeButton.Enabled = true;
+
+            if (_usedWebCache && _settings.ClearWebCacheAfterInstall)
+            {
+                WebInstallerCacheService.ClearCache(WebInstallerCacheService.ResolveCacheFolder(_settings));
+            }
 
             var hasFailures = Results.Any(r => r.Outcome is InstallOutcome.Failed or InstallOutcome.FileNotFound);
             _diagnoseButton.Visible = _settings.TroubleshooterEnabled && hasFailures;
@@ -278,5 +397,15 @@ public sealed class InstallProgressForm : Form
         _logBox.AppendText($"[{DateTime.Now:HH:mm:ss}] {message}{Environment.NewLine}");
         _logBox.SelectionStart = _logBox.TextLength;
         _logBox.ScrollToCaret();
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _webCacheService.Dispose();
+        }
+
+        base.Dispose(disposing);
     }
 }

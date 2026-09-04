@@ -14,6 +14,7 @@ public sealed class EditInstallerForm : Form
 {
     private readonly InstallerEntry _entry;
     private readonly IReadOnlyList<InstanceDefinition> _instances;
+    private readonly string _folder;
 
     private readonly TextBox _nameBox;
     private readonly ComboBox _typeCombo;
@@ -24,25 +25,31 @@ public sealed class EditInstallerForm : Form
     private readonly TextBox _notesBox;
     private readonly TextBox _tagsBox;
     private readonly CheckedListBox _instancesList;
+    private readonly Label _hashLabel;
+    private readonly Button _hashButton;
+    private readonly ToolTip _toolTip = new();
+    private string? _pendingHash;
 
-    public EditInstallerForm(InstallerEntry entry, IReadOnlyList<InstanceDefinition> instances)
+    public EditInstallerForm(InstallerEntry entry, IReadOnlyList<InstanceDefinition> instances, string folder)
     {
         _entry = entry;
         _instances = instances;
+        _folder = folder;
+        _pendingHash = entry.ExpectedSha256;
 
         Text = $"Editar - {entry.Name}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(580, 530);
+        ClientSize = new Size(580, 564);
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(12),
             ColumnCount = 3,
-            RowCount = 11,
+            RowCount = 12,
             AutoSize = false,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
@@ -55,7 +62,7 @@ public sealed class EditInstallerForm : Form
         // to an earlier, still-unstyled row instead.
         // Rows holding a Dock=Fill button need the button's minimum height
         // plus its margins, or the button overflows its cell and is clipped.
-        int[] rowHeights = { 28, 34, 38, 34, 38, 38, 34, 76, 34, 90, 46 };
+        int[] rowHeights = { 28, 30, 34, 38, 34, 38, 38, 34, 76, 34, 90, 46 };
         foreach (var height in rowHeights)
         {
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
@@ -65,9 +72,30 @@ public sealed class EditInstallerForm : Form
         var row = 0;
 
         layout.Controls.Add(new Label { Text = "Archivo:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
-        var fileLabel = new Label { Text = entry.FileName, AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = SystemColors.GrayText };
+        var fileText = entry.FileName + (string.IsNullOrWhiteSpace(entry.MirrorUrl) ? "" : "  (descarga desde un mirror web)");
+        var fileLabel = new Label { Text = fileText, AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = SystemColors.GrayText };
         layout.Controls.Add(fileLabel, 1, row);
         layout.SetColumnSpan(fileLabel, 2);
+        row++;
+
+        var isWebSourced = !string.IsNullOrWhiteSpace(entry.MirrorUrl);
+        layout.Controls.Add(new Label { Text = "Hash SHA-256:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+        _hashLabel = new Label { AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = SystemColors.GrayText };
+        layout.Controls.Add(_hashLabel, 1, row);
+        _hashButton = AppTheme.CreateButton(string.Empty);
+        _hashButton.AutoSize = false;
+        _hashButton.Dock = DockStyle.Fill;
+        if (isWebSourced)
+        {
+            _hashButton.Enabled = false;
+            _toolTip.SetToolTip(_hashButton, "Este programa se descarga desde un mirror; el hash se fija al añadirlo o al comprobarlo de nuevo.");
+        }
+        else
+        {
+            _hashButton.Click += OnHashButtonClick;
+        }
+        layout.Controls.Add(_hashButton, 2, row);
+        RefreshHashButton();
         row++;
 
         layout.Controls.Add(new Label { Text = "Nombre:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
@@ -177,6 +205,52 @@ public sealed class EditInstallerForm : Form
     private InstallerType SelectedType =>
         Enum.TryParse<InstallerType>(_typeCombo.SelectedItem as string, out var type) ? type : InstallerType.Unknown;
 
+    private void RefreshHashButton()
+    {
+        _hashLabel.Text = string.IsNullOrWhiteSpace(_pendingHash) ? "(sin fijar)" : _pendingHash;
+
+        if (!string.IsNullOrWhiteSpace(_entry.MirrorUrl))
+        {
+            _hashButton.Text = "No editable aquí";
+            return;
+        }
+
+        _hashButton.Text = string.IsNullOrWhiteSpace(_pendingHash) ? "Calcular y fijar" : "Quitar hash";
+    }
+
+    private async void OnHashButtonClick(object? sender, EventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(_pendingHash))
+        {
+            _pendingHash = null;
+            RefreshHashButton();
+            return;
+        }
+
+        var fullPath = Path.Combine(_folder, _entry.FileName);
+        if (!File.Exists(fullPath))
+        {
+            MessageBox.Show(this, "El archivo no está en la carpeta de instaladores.", "Archivo no encontrado",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        _hashButton.Enabled = false;
+        try
+        {
+            _pendingHash = await Sha256Service.ComputeAsync(fullPath, CancellationToken.None);
+        }
+        catch (IOException ex)
+        {
+            MessageBox.Show(this, ex.Message, "No se pudo calcular el hash", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _hashButton.Enabled = true;
+            RefreshHashButton();
+        }
+    }
+
     private void OnSuggestArguments(object? sender, EventArgs e)
     {
         var suggestion = SilentArgsCatalog.GetSuggestedArguments(SelectedType);
@@ -233,6 +307,7 @@ public sealed class EditInstallerForm : Form
         }
 
         _entry.Name = _nameBox.Text.Trim();
+        _entry.ExpectedSha256 = _pendingHash;
         _entry.Type = SelectedType;
         _entry.Arguments = _argumentsBox.Text.Trim();
         _entry.TargetInstallDir = string.IsNullOrWhiteSpace(_installDirBox.Text) ? null : _installDirBox.Text.Trim();

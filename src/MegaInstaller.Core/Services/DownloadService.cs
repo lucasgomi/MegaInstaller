@@ -7,10 +7,21 @@ namespace MegaInstaller.Core.Services;
 public sealed class DownloadService : IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly bool _ownsClient;
 
-    public DownloadService()
+    public DownloadService() : this(new HttpClient(), ownsClient: true)
     {
-        _httpClient = new HttpClient();
+    }
+
+    /// <summary>Uses a caller-supplied client instead of owning one - for tests (a fake handler) or to share a client elsewhere. Never disposed by this instance.</summary>
+    public DownloadService(HttpClient httpClient) : this(httpClient, ownsClient: false)
+    {
+    }
+
+    private DownloadService(HttpClient httpClient, bool ownsClient)
+    {
+        _httpClient = httpClient;
+        _ownsClient = ownsClient;
     }
 
     public async Task DownloadAsync(

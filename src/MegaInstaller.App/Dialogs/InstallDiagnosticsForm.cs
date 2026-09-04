@@ -14,6 +14,7 @@ public sealed class InstallDiagnosticsForm : Form
 {
     private readonly string _folder;
     private readonly List<(InstallerEntry Entry, InstallResult Result, InstallDiagnosis Diagnosis)> _failures;
+    private readonly IReadOnlyDictionary<string, string>? _resolvedPaths;
     private readonly ManifestService _manifestService = new();
     private readonly InstallService _installService = new();
 
@@ -27,9 +28,10 @@ public sealed class InstallDiagnosticsForm : Form
 
     public bool ManifestChanged { get; private set; }
 
-    public InstallDiagnosticsForm(string folder, IEnumerable<(InstallerEntry Entry, InstallResult Result)> failures)
+    public InstallDiagnosticsForm(string folder, IEnumerable<(InstallerEntry Entry, InstallResult Result)> failures, IReadOnlyDictionary<string, string>? resolvedPaths = null)
     {
         _folder = folder;
+        _resolvedPaths = resolvedPaths;
         _failures = failures
             .Select(f => (f.Entry, f.Result, InstallDiagnostics.Analyze(f.Entry, f.Result)))
             .ToList();
@@ -155,7 +157,7 @@ public sealed class InstallDiagnosticsForm : Form
         _statusLabel.Text = "Probando...";
         try
         {
-            var result = await _installService.InstallOneAsync(_folder, trial, CancellationToken.None);
+            var result = await _installService.InstallOneAsync(_folder, trial, CancellationToken.None, _resolvedPaths);
             _statusLabel.Text = result.Outcome switch
             {
                 InstallOutcome.Success => "Funcionó. Pulsa \"Guardar en el programa\" para dejarlo así.",
@@ -205,6 +207,8 @@ public sealed class InstallDiagnosticsForm : Form
         Id = entry.Id,
         Name = entry.Name,
         FileName = entry.FileName,
+        MirrorUrl = entry.MirrorUrl,
+        ExpectedSha256 = entry.ExpectedSha256,
         Type = entry.Type,
         Arguments = arguments,
         TargetInstallDir = entry.TargetInstallDir,

@@ -17,6 +17,23 @@ public sealed class InstallerEntry
     /// <summary>URL the file was downloaded from, if added that way. Optional.</summary>
     public string? SourceUrl { get; set; }
 
+    /// <summary>
+    /// Direct-download URL for a web-sourced installer that carries no local
+    /// file at all - only this URL and its install config are stored, and
+    /// <see cref="FileName"/> becomes the name it's saved as once
+    /// <see cref="Services.WebInstallerCacheService"/> downloads it into a
+    /// temporary cache right before installing. Null for a normal installer
+    /// that already lives in the installers folder.
+    /// </summary>
+    public string? MirrorUrl { get; set; }
+
+    /// <summary>
+    /// Pinned SHA-256 (lowercase hex) of the expected file, checked right
+    /// after resolving it (locally or via <see cref="MirrorUrl"/>) and
+    /// before it's ever executed. Null means no pin - nothing is verified.
+    /// </summary>
+    public string? ExpectedSha256 { get; set; }
+
     public InstallerType Type { get; set; } = InstallerType.Unknown;
 
     /// <summary>
