@@ -106,7 +106,10 @@ public sealed class MainForm : Form
                 AutoSize = true,
                 Font = titleFont,
                 ForeColor = ModernPalette.AdminGold,
-                Margin = new Padding(10, 0, 0, 0),
+                // Small margin only: an AutoSize label already carries a few
+                // pixels of its own slack, so anything larger reads as a gap
+                // rather than as part of the same title.
+                Margin = new Padding(2, 0, 0, 0),
             });
         }
         headerPanel.Controls.Add(titlePanel, 1, 0);
