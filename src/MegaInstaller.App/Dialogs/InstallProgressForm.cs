@@ -39,7 +39,7 @@ public sealed class InstallProgressForm : Form
         _entries = entries.ToList();
         _stopOnError = stopOnError;
 
-        Text = "Instalando...";
+        Text = ElevationProbe.IsProcessElevated() ? "Instalando... - Administrador" : "Instalando...";
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
@@ -115,7 +115,11 @@ public sealed class InstallProgressForm : Form
 
         Load += async (_, _) =>
         {
-            OfferSingleElevationIfUseful();
+            if (OfferSingleElevationIfUseful())
+            {
+                return;
+            }
+
             await RunAsync();
         };
         FormClosing += OnFormClosing;
@@ -123,29 +127,45 @@ public sealed class InstallProgressForm : Form
     }
 
     /// <summary>
-    /// A child process inherits its parent's token, so an elevated
-    /// MegaInstaller installs everything without any further UAC prompts.
-    /// Offered before the batch starts, since it means restarting the app.
+    /// A child process inherits its parent's token, so an elevated copy of
+    /// MegaInstaller installs the whole batch with a single UAC prompt.
+    /// Asked automatically as soon as anything in the batch needs admin.
+    /// Returns true when the batch was handed over and this window should
+    /// just close instead of installing anything itself.
     /// </summary>
-    private void OfferSingleElevationIfUseful()
+    private bool OfferSingleElevationIfUseful()
     {
         var adminEntries = _entries.Count(e => e.RunAsAdmin);
-        if (adminEntries < 2 || _settings.SkipElevationOffer || ElevationProbe.IsProcessElevated())
+        if (adminEntries == 0 || _settings.SkipElevationOffer || ElevationProbe.IsProcessElevated())
         {
-            return;
+            return false;
         }
+
+        var subject = adminEntries == 1
+            ? "Uno de estos programas pide permisos de administrador"
+            : $"{adminEntries} de estos programas piden permisos de administrador";
 
         var choice = MessageBox.Show(this,
-            $"{adminEntries} de estos programas piden permisos de administrador, así que Windows mostrará un aviso de UAC por cada uno.\n\n" +
-            "Si reinicias MegaInstaller como administrador, aceptas el aviso una sola vez y todas las instalaciones lo heredan " +
-            "(además pueden ir en paralelo, así que acaba antes).\n\n" +
-            "¿Reiniciar ahora como administrador? Tendrás que volver a lanzar esta instalación.",
-            "Un solo aviso de administrador", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            $"{subject}, así que Windows mostrará un aviso de UAC por cada uno.\n\n" +
+            "Puedo hacerlo en una ventana elevada: aceptas el aviso una sola vez, todas las instalaciones lo heredan " +
+            "y además pueden ir en paralelo, así que acaba antes.\n\n" +
+            "¿Elevar permisos para esta instalación?",
+            "Elevar permisos", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
-        if (choice == DialogResult.Yes && ElevatedRelauncher.TryRelaunchElevated(this))
+        if (choice != DialogResult.Yes)
         {
-            Close();
+            return false;
         }
+
+        if (!ElevatedInstallLauncher.TryLaunch(this, _folder, _entries, _stopOnError))
+        {
+            // UAC dismissed or the handover failed: fall back to installing
+            // here, prompting per installer as before.
+            return false;
+        }
+
+        Close();
+        return true;
     }
 
     private void OnDiagnose(object? sender, EventArgs e)
