@@ -39,7 +39,7 @@ public sealed class InstallerLibraryForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(1040, 678);
+        ClientSize = new Size(1040, 716);
 
         _manifest = LoadManifest();
 
@@ -47,7 +47,13 @@ public sealed class InstallerLibraryForm : Form
         // Button rows have to fit the button's whole footprint (height plus
         // its top/bottom margins) or the FlowLayoutPanel clips it at the bottom.
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        // Real rendered widths for 4 label+combo pairs plus a button can't be
+        // measured from this Linux dev box, so instead of re-guessing a
+        // single-line width, this row is tall enough for the filter panel to
+        // wrap to a second line (WrapContents=true below) if it doesn't fit -
+        // that way nothing can end up pushed past the visible area no matter
+        // how far off a width estimate turns out to be on a real machine.
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
@@ -62,7 +68,7 @@ public sealed class InstallerLibraryForm : Form
         searchPanel.Controls.Add(_searchBox, 1, 0);
         root.Controls.Add(searchPanel, 0, 0);
 
-        var filterPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(8, 4, 8, 4) };
+        var filterPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, Padding = new Padding(8, 4, 8, 4) };
 
         filterPanel.Controls.Add(new Label { Text = "Fuente:", AutoSize = true, Margin = new Padding(0, 8, 4, 0) });
         _sourceFilterCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110, Margin = new Padding(0, 5, 14, 0) };
@@ -113,7 +119,7 @@ public sealed class InstallerLibraryForm : Form
         var editButton = MakeButton("Editar...", OnEdit);
         var bulkEditButton = MakeButton("Editar marcados...", OnBulkEdit);
         _toolTip.SetToolTip(bulkEditButton, "Edita a la vez los programas con la casilla marcada en la columna izquierda de la tabla.");
-        var removeButton = MakeButton("Quitar", OnRemove);
+        var removeButton = MakeButton("Eliminar", OnRemove);
         actionsPanel.Controls.AddRange(new Control[] { detectButton, editButton, bulkEditButton, removeButton });
         root.Controls.Add(actionsPanel, 0, 2);
 
@@ -193,17 +199,27 @@ public sealed class InstallerLibraryForm : Form
         var rowMenu = new ContextMenuStrip();
         rowMenu.Items.Add(AppTheme.CreateMenuItem("Editar...", OnEdit));
         rowMenu.Items.Add(AppTheme.CreateMenuItem("Renombrar...", OnRenameSelected));
-        rowMenu.Items.Add(AppTheme.CreateMenuItem("Quitar", OnRemove));
+        rowMenu.Items.Add(AppTheme.CreateMenuItem("Eliminar", OnRemove));
         grid.ContextMenuStrip = rowMenu;
         // A right-click outside the current (possibly multi-row) selection
         // selects just that row first, matching Explorer; a right-click
-        // inside an existing selection leaves it alone so "Quitar" can still
-        // act on the whole selection.
+        // inside an existing selection leaves it alone so "Eliminar" can
+        // still act on the whole selection.
         grid.CellMouseDown += (_, e) =>
         {
             if (e.Button != MouseButtons.Right || e.RowIndex < 0 || grid.Rows[e.RowIndex].Selected) return;
             grid.ClearSelection();
             grid.Rows[e.RowIndex].Selected = true;
+        };
+        // The natural expected shortcut for "delete the selection" - the
+        // grid isn't in edit mode for a plain Delete press (that would need
+        // F2/a click first), so this can't collide with in-cell text editing.
+        grid.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Delete)
+            {
+                OnRemove(grid, EventArgs.Empty);
+            }
         };
 
         return grid;
@@ -568,14 +584,14 @@ public sealed class InstallerLibraryForm : Form
 
         if (rows.Count == 0)
         {
-            MessageBox.Show(this, "Selecciona uno o más instaladores para quitar.", "Nada seleccionado",
+            MessageBox.Show(this, "Selecciona uno o más instaladores para eliminar.", "Nada seleccionado",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
         var choice = MessageBox.Show(this,
-            $"¿Quitar {rows.Count} elemento(s) de la lista? El archivo no se borrará del disco. También se quitarán de cualquier instancia que los use.",
-            "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            $"¿Eliminar {rows.Count} elemento(s) de la lista? El archivo no se borrará del disco. También se quitarán de cualquier instancia que los use.",
+            "Confirmar eliminación", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (choice != DialogResult.Yes) return;
 
         foreach (var row in rows)

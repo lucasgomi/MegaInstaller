@@ -178,10 +178,16 @@ public sealed class SettingsForm : Form
             ForeColor = SystemColors.GrayText,
             Text = "Pulsa \"Buscar actualizaciones\" para comprobar si hay una versión más reciente.",
         };
+        // Hosted in a double-buffered panel: the download-progress text
+        // below reassigns Text many times a second, and a plain
+        // TableLayoutPanel cell isn't double-buffered, so those rapid
+        // repaints showed as garbled/overlapping text instead of a clean update.
+        var updateStatusHost = new DoubleBufferedPanel { Dock = DockStyle.Fill };
+        updateStatusHost.Controls.Add(_updateStatusLabel);
         _installUpdateButton = AppTheme.CreateButton("Instalar actualización", primary: true);
         _installUpdateButton.Enabled = false;
         _installUpdateButton.Click += OnInstallUpdate;
-        updateStatusPanel.Controls.Add(_updateStatusLabel, 0, 0);
+        updateStatusPanel.Controls.Add(updateStatusHost, 0, 0);
         updateStatusPanel.Controls.Add(_installUpdateButton, 1, 0);
         root.Controls.Add(updateStatusPanel, 0, 11);
 
@@ -300,11 +306,26 @@ public sealed class SettingsForm : Form
         _installUpdateButton.Enabled = false;
         _updateCts = new CancellationTokenSource();
 
+        // DownloadService reports progress once per 80KB chunk - for a ~65MB
+        // update that's 800+ callbacks, each reassigning Text. Only acting
+        // when the whole percentage actually changes cuts that to at most
+        // ~100 label updates regardless of file size or connection speed,
+        // which is what actually stopped the rapid-repaint text glitching
+        // (the double-buffered host above handles whatever's still left).
+        int? lastReportedPercent = null;
         var progress = new Progress<DownloadProgressInfo>(info =>
         {
-            _updateStatusLabel.Text = info.PercentComplete is { } percent
-                ? $"Descargando actualización... {percent:0.#}%"
-                : "Descargando actualización...";
+            if (info.PercentComplete is not { } percent)
+            {
+                _updateStatusLabel.Text = "Descargando actualización...";
+                return;
+            }
+
+            var rounded = (int)percent;
+            if (rounded == lastReportedPercent) return;
+
+            lastReportedPercent = rounded;
+            _updateStatusLabel.Text = $"Descargando actualización... {rounded}%";
         });
 
         var started = await AppUpdater.DownloadAndInstallAsync(this, exeUrl, progress, _updateCts.Token);
