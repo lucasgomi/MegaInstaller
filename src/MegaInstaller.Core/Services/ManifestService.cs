@@ -14,7 +14,8 @@ public sealed class ManifestService
 {
     public const string ManifestFileName = "megainstaller.json";
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    /// <summary>Shared with <see cref="ExportPackageService"/> so a packaged manifest round-trips identically to megainstaller.json itself.</summary>
+    public static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
         Converters = { new JsonStringEnumConverter() }

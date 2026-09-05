@@ -30,11 +30,12 @@ public sealed class MainForm : Form
     private readonly DataGridView? _grid;
     private readonly FlowLayoutPanel? _cardsFlow;
     private readonly ToolTip _toolTip = new();
+    private bool _updateAvailable;
 
     public MainForm()
     {
         var elevated = ElevationProbe.IsProcessElevated();
-        Text = elevated ? "MegaInstaller - Administrador" : "MegaInstaller";
+        UpdateTitle();
         Width = 900;
         Height = 620;
         // Fixed size rather than resizable: the header and card gallery
@@ -102,11 +103,19 @@ public sealed class MainForm : Form
         {
             titlePanel.Controls.Add(new Label
             {
+                Text = "-",
+                AutoSize = true,
+                Font = titleFont,
+                ForeColor = AppTheme.IsModern ? ModernPalette.TextSecondary : SystemColors.ControlText,
+                Margin = new Padding(3, 0, 3, 0),
+            });
+            titlePanel.Controls.Add(new Label
+            {
                 Text = "AdminMode",
                 AutoSize = true,
                 Font = titleFont,
                 ForeColor = ModernPalette.AdminGold,
-                Margin = new Padding(10, 0, 0, 0),
+                Margin = new Padding(0),
             });
         }
         headerPanel.Controls.Add(titlePanel, 1, 0);
@@ -117,13 +126,35 @@ public sealed class MainForm : Form
         root.Controls.Add(headerPanel, 0, 0);
 
         var actionsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 2, 8, 2) };
-        actionsPanel.Controls.Add(MakeButton("Nueva instancia...", OnNewInstance));
-        actionsPanel.Controls.Add(MakeButton("Editar instancia...", OnEditInstance));
-        actionsPanel.Controls.Add(MakeButton("Eliminar instancia", OnRemoveInstance));
-        actionsPanel.Controls.Add(MakeButton("Instalar instancia...", OnInstallInstance, primary: true));
-        var libraryButton = MakeButton("Editor de programas...", OnOpenLibrary);
-        libraryButton.Margin = new Padding(40, 4, 4, 4);
-        actionsPanel.Controls.Add(libraryButton);
+
+        // Nueva/Editar/Eliminar are all "manage the selected instance" actions,
+        // so they live behind one dropdown instead of three separate buttons -
+        // that's also what leaves room in this bar for "Instalar varias...".
+        var instanceMenu = new ContextMenuStrip();
+        instanceMenu.Items.Add(AppTheme.CreateMenuItem("Nueva instancia...", OnNewInstance));
+        instanceMenu.Items.Add(AppTheme.CreateMenuItem("Editar instancia...", OnEditInstance));
+        instanceMenu.Items.Add(AppTheme.CreateMenuItem("Eliminar instancia", OnRemoveInstance));
+        actionsPanel.Controls.Add(AppTheme.CreateDropdownButton("Instancia", instanceMenu));
+
+        actionsPanel.Controls.Add(MakeDivider());
+
+        var installMenu = new ContextMenuStrip();
+        installMenu.Items.Add(AppTheme.CreateMenuItem("Instalar seleccionada...", OnInstallInstance));
+        installMenu.Items.Add(AppTheme.CreateMenuItem("Instalar varias...", OnInstallMultiple));
+        actionsPanel.Controls.Add(AppTheme.CreateDropdownButton("Instalar", installMenu, primary: true));
+
+        actionsPanel.Controls.Add(MakeDivider());
+
+        actionsPanel.Controls.Add(MakeButton("Editor de programas...", OnOpenLibrary));
+
+        actionsPanel.Controls.Add(MakeDivider());
+
+        var exportMenu = new ContextMenuStrip();
+        exportMenu.Items.Add(AppTheme.CreateMenuItem("Exportar instancia seleccionada...", OnExportInstance));
+        exportMenu.Items.Add(AppTheme.CreateMenuItem("Exportar todo...", OnExportAll));
+        exportMenu.Items.Add(AppTheme.CreateMenuItem("Importar...", OnImportPackage));
+        actionsPanel.Controls.Add(AppTheme.CreateDropdownButton("Exportar/Importar", exportMenu));
+
         root.Controls.Add(actionsPanel, 0, 1);
 
         if (AppTheme.IsModern)
@@ -138,7 +169,50 @@ public sealed class MainForm : Form
         }
 
         AppTheme.StyleForm(this);
-        Load += (_, _) => EnsureFolderForThisSession();
+        Load += (_, _) =>
+        {
+            EnsureFolderForThisSession();
+            _ = CheckForUpdateInBackgroundAsync();
+        };
+    }
+
+    private void UpdateTitle()
+    {
+        var parts = new List<string> { "MegaInstaller" };
+        if (ElevationProbe.IsProcessElevated())
+        {
+            parts.Add("Administrador");
+        }
+
+        if (_updateAvailable)
+        {
+            parts.Add("Actualización disponible");
+        }
+
+        Text = string.Join(" - ", parts);
+    }
+
+    /// <summary>
+    /// Silent, best-effort check against GitHub Releases: only ever changes
+    /// the title bar when a genuinely newer version is confirmed, and never
+    /// surfaces an error if GitHub is unreachable - the whole point is to be
+    /// a free bonus on top of a normal launch, not something to depend on.
+    /// </summary>
+    private async Task CheckForUpdateInBackgroundAsync()
+    {
+        try
+        {
+            using var releaseService = new GitHubReleaseService();
+            var latest = await releaseService.GetLatestReleaseAsync(ReleaseInfo.RepoOwner, ReleaseInfo.RepoName, CancellationToken.None);
+            if (latest is not null && ReleaseInfo.IsNewer(latest.TagName))
+            {
+                _updateAvailable = true;
+                UpdateTitle();
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        {
+        }
     }
 
     private static Icon? LoadAppIcon()
@@ -159,6 +233,15 @@ public sealed class MainForm : Form
         button.Click += handler;
         return button;
     }
+
+    /// <summary>A thin vertical rule separating groups of actions in the top bar - inset top/bottom so it reads as deliberate, not a stray line.</summary>
+    private static Control MakeDivider() => new Panel
+    {
+        Width = 1,
+        Height = 28,
+        Margin = new Padding(6, 7, 6, 7),
+        BackColor = AppTheme.IsModern ? ModernPalette.Border : SystemColors.ControlDark,
+    };
 
     private DataGridView BuildGrid()
     {
@@ -183,7 +266,10 @@ public sealed class MainForm : Form
         grid.Columns.Add(new DataGridViewTextBoxColumn { DataPropertyName = "ProgramCount", HeaderText = "Programas", Width = 90, ReadOnly = true });
         grid.RowTemplate.Height = 32;
 
-        grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) OnEditInstance(this, EventArgs.Empty); };
+        // Double-click installs the selected instance; editing has its own
+        // explicit menu entry. The row is already selected by the first of
+        // the two clicks (FullRowSelect selects on mouse-down).
+        grid.CellDoubleClick += (_, e) => { if (e.RowIndex >= 0) OnInstallInstance(this, EventArgs.Empty); };
         grid.CurrentCellDirtyStateChanged += (_, _) =>
         {
             if (grid.IsCurrentCellDirty) grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
@@ -289,11 +375,24 @@ public sealed class MainForm : Form
 
         foreach (var instance in _manifest.Instances.OrderBy(i => i.Order))
         {
-            var count = InstanceService.ResolveInstallers(_manifest, instance).Count;
-            var card = InstanceCardControl.ForInstance(instance, count, _folder);
+            var resolved = InstanceService.ResolveInstallers(_manifest, instance);
+            var hasWebInstallers = resolved.Any(entry => !string.IsNullOrWhiteSpace(entry.MirrorUrl));
+            var card = InstanceCardControl.ForInstance(instance, resolved.Count, hasWebInstallers, _folder);
             card.Selected = card.InstanceId == _selectedInstanceId;
             card.Click += (_, _) => SelectCard(card.InstanceId);
-            card.DoubleClick += (_, _) => { SelectCard(card.InstanceId); OnEditInstance(this, EventArgs.Empty); };
+            // Double-click installs; editing has its own explicit menu entry.
+            card.DoubleClick += (_, _) => { SelectCard(card.InstanceId); OnInstallInstance(this, EventArgs.Empty); };
+
+            var cardMenu = new ContextMenuStrip();
+            cardMenu.Items.Add(AppTheme.CreateMenuItem("Modificar...", OnEditInstance));
+            cardMenu.Items.Add(AppTheme.CreateMenuItem("Renombrar...", OnRenameInstance));
+            cardMenu.Items.Add(AppTheme.CreateMenuItem("Borrar", OnRemoveInstance));
+            // Right-click has to select this card first (MouseDown always
+            // precedes the menu's own MouseUp-triggered popup), or the menu
+            // would act on whichever card was selected before.
+            card.MouseDown += (_, e) => { if (e.Button == MouseButtons.Right) SelectCard(card.InstanceId); };
+            card.ContextMenuStrip = cardMenu;
+
             flow.Controls.Add(card);
         }
 
@@ -359,6 +458,8 @@ public sealed class MainForm : Form
         settings.TroubleshooterEnabled = settingsForm.TroubleshooterEnabled;
         settings.SkipElevationOffer = settingsForm.SkipElevationOffer;
         settings.UiTheme = settingsForm.SelectedTheme;
+        settings.WebCacheFolder = settingsForm.WebCacheFolder;
+        settings.ClearWebCacheAfterInstall = settingsForm.ClearWebCacheAfterInstall;
         _settingsService.Save(settings);
 
         if (settingsForm.SelectedTheme != themeBefore)
@@ -418,6 +519,24 @@ public sealed class MainForm : Form
         }
     }
 
+    private void OnRenameInstance(object? sender, EventArgs e)
+    {
+        var row = SelectedRow();
+        if (row is null)
+        {
+            MessageBox.Show(this, "Selecciona una instancia para renombrar.", "Nada seleccionado",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var renameForm = new RenameForm("Renombrar instancia", row.Instance.Name);
+        if (renameForm.ShowDialog(this) != DialogResult.OK) return;
+
+        row.Instance.Name = renameForm.NewName;
+        SaveManifest();
+        RefreshGrid();
+    }
+
     private void OnRemoveInstance(object? sender, EventArgs e)
     {
         var row = SelectedRow();
@@ -435,8 +554,36 @@ public sealed class MainForm : Form
 
         _manifest.Instances.Remove(row.Instance);
         if (_selectedInstanceId == row.Instance.Id) _selectedInstanceId = null;
+        DeleteCustomIconIfOrphaned(row.Instance.IconKey);
         SaveManifest();
         RefreshGrid();
+    }
+
+    /// <summary>
+    /// Deletes a custom icon file (e.g. one auto-extracted from a web
+    /// installer, or manually uploaded) once nothing references it anymore -
+    /// otherwise CustomTheme would just accumulate orphaned files every time
+    /// an instance using one gets deleted.
+    /// </summary>
+    private void DeleteCustomIconIfOrphaned(string? iconKey)
+    {
+        if (!InstanceIconCatalog.IsCustomKey(iconKey)) return;
+        if (_manifest.Instances.Any(i => i.IconKey == iconKey)) return;
+
+        var fileName = CustomIconPaths.FileNameFromKey(iconKey);
+        if (fileName is null) return;
+
+        try
+        {
+            var path = Path.Combine(_folder, InstanceIconCatalog.CustomThemeFolderName, fileName);
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     private void OnInstallInstance(object? sender, EventArgs e)
@@ -462,5 +609,144 @@ public sealed class MainForm : Form
 
         using var installForm = new InstallInstanceForm(_folder, row.Instance, resolved);
         installForm.ShowDialog(this);
+    }
+
+    private void OnInstallMultiple(object? sender, EventArgs e)
+    {
+        if (!EnsureFolderSelected()) return;
+
+        if (_manifest.Instances.Count == 0)
+        {
+            MessageBox.Show(this, "Todavía no hay ninguna instancia creada.", "Nada que instalar",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var multiForm = new MultiInstallInstancesForm(_folder, _manifest);
+        multiForm.ShowDialog(this);
+    }
+
+    private void OnExportInstance(object? sender, EventArgs e)
+    {
+        if (!EnsureFolderSelected()) return;
+
+        var row = SelectedRow();
+        if (row is null)
+        {
+            MessageBox.Show(this, "Selecciona una instancia para exportar.", "Nada seleccionado",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Exportar instancia",
+            Filter = "Paquete de MegaInstaller (*.zip)|*.zip|Todos los archivos (*.*)|*.*",
+            FileName = $"{SanitizeFileName(row.Instance.Name)}.zip",
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            ExportPackageService.ExportInstance(_folder, _manifest, row.Instance, dialog.FileName);
+            MessageBox.Show(this, $"Instancia exportada a:\n{dialog.FileName}", "Exportación completada",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"No se pudo exportar: {ex.Message}", "Error al exportar",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void OnExportAll(object? sender, EventArgs e)
+    {
+        if (!EnsureFolderSelected()) return;
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Exportar todo",
+            Filter = "Paquete de MegaInstaller (*.zip)|*.zip|Todos los archivos (*.*)|*.*",
+            FileName = "MegaInstaller-completo.zip",
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            ExportPackageService.ExportAll(_folder, _manifest, dialog.FileName);
+            MessageBox.Show(this, $"Todo exportado a:\n{dialog.FileName}", "Exportación completada",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"No se pudo exportar: {ex.Message}", "Error al exportar",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void OnImportPackage(object? sender, EventArgs e)
+    {
+        if (!EnsureFolderSelected()) return;
+
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Importar paquete de MegaInstaller",
+            Filter = "Paquete de MegaInstaller (*.zip)|*.zip|Todos los archivos (*.*)|*.*",
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        ImportPreview preview;
+        try
+        {
+            preview = ExportPackageService.PreviewImport(dialog.FileName, _folder);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or System.Text.Json.JsonException)
+        {
+            MessageBox.Show(this, $"No se pudo leer el paquete: {ex.Message}", "Paquete no válido",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        if (preview.NewInstances.Count == 0 && preview.NewInstallers.Count == 0)
+        {
+            MessageBox.Show(this,
+                "No hay nada nuevo que importar: todo lo que trae este paquete ya está en esta carpeta.",
+                "Nada que importar", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var summary = $"Se añadirán {preview.NewInstances.Count} instancia(s) y {preview.NewInstallers.Count} programa(s).";
+        if (preview.SkippedInstances.Count > 0 || preview.SkippedInstallers.Count > 0)
+        {
+            summary += $"\nYa existían y se omitirán: {preview.SkippedInstances.Count} instancia(s), {preview.SkippedInstallers.Count} programa(s).";
+        }
+        if (preview.RenamedFiles.Count > 0)
+        {
+            summary += $"\nSe renombrarán por conflicto de nombre: {string.Join(", ", preview.RenamedFiles)}.";
+        }
+        summary += "\n\n¿Continuar con la importación?";
+
+        var choice = MessageBox.Show(this, summary, "Importar paquete", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (choice != DialogResult.Yes) return;
+
+        try
+        {
+            ExportPackageService.Import(dialog.FileName, _folder);
+            LoadFolder(_folder);
+            MessageBox.Show(this, "Importación completada.", "Importar paquete",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"No se pudo importar: {ex.Message}", "Error al importar",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = new string(name.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim();
+        return string.IsNullOrWhiteSpace(sanitized) ? "instancia" : sanitized;
     }
 }

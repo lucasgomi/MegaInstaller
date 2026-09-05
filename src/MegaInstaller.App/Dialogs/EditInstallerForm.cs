@@ -14,6 +14,7 @@ public sealed class EditInstallerForm : Form
 {
     private readonly InstallerEntry _entry;
     private readonly IReadOnlyList<InstanceDefinition> _instances;
+    private readonly string _folder;
 
     private readonly TextBox _nameBox;
     private readonly ComboBox _typeCombo;
@@ -24,30 +25,49 @@ public sealed class EditInstallerForm : Form
     private readonly TextBox _notesBox;
     private readonly TextBox _tagsBox;
     private readonly CheckedListBox _instancesList;
+    private readonly Label _hashLabel;
+    private readonly Button? _hashButton;
+    private readonly Button? _regenerateHashButton;
+    private readonly Button? _removeHashButton;
+    private readonly Button _okButton;
+    private readonly Button _cancelButton;
+    private readonly ToolTip _toolTip = new();
+    private readonly bool _isWebSourced;
+    private string? _pendingHash;
+    private CancellationTokenSource? _hashCts;
+    private bool _regeneratingHash;
 
-    public EditInstallerForm(InstallerEntry entry, IReadOnlyList<InstanceDefinition> instances)
+    public EditInstallerForm(InstallerEntry entry, IReadOnlyList<InstanceDefinition> instances, string folder)
     {
         _entry = entry;
         _instances = instances;
+        _folder = folder;
+        _pendingHash = entry.ExpectedSha256;
+
+        _isWebSourced = !string.IsNullOrWhiteSpace(entry.MirrorUrl);
 
         Text = $"Editar - {entry.Name}";
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(580, 530);
+        ClientSize = new Size(580, 614);
 
         var layout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(12),
             ColumnCount = 3,
-            RowCount = 11,
+            RowCount = 13,
             AutoSize = false,
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        // Wide enough for "Calcular y fijar"/"No editable aquí" - the
+        // longest labels this column's button ever shows - without
+        // truncating; the shorter "Sugerir flags"/"..." buttons elsewhere
+        // in this column just get some extra breathing room.
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
         // RowStyles is a plain positional list - RowStyles[i] governs row i
         // regardless of when in the code below it's added, so every row's
         // style must be declared here, upfront, in row order. Adding a
@@ -55,7 +75,11 @@ public sealed class EditInstallerForm : Form
         // to an earlier, still-unstyled row instead.
         // Rows holding a Dock=Fill button need the button's minimum height
         // plus its margins, or the button overflows its cell and is clipped.
-        int[] rowHeights = { 28, 34, 38, 34, 38, 38, 34, 76, 34, 90, 46 };
+        // The hash-actions row holds AppTheme.CreateButton instances inside a
+        // FlowLayoutPanel, same composition as the bottom Guardar/Cancelar
+        // row - it needs that row's proven 46px, not a plain value row's
+        // 34px, or the buttons get compressed and their text clips.
+        int[] rowHeights = { 28, 34, 46, 34, 38, 34, 38, 38, 34, 76, 34, 90, 46 };
         foreach (var height in rowHeights)
         {
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
@@ -65,9 +89,44 @@ public sealed class EditInstallerForm : Form
         var row = 0;
 
         layout.Controls.Add(new Label { Text = "Archivo:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
-        var fileLabel = new Label { Text = entry.FileName, AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = SystemColors.GrayText };
+        var fileText = entry.FileName + (string.IsNullOrWhiteSpace(entry.MirrorUrl) ? "" : "  (descarga desde un mirror web)");
+        var fileLabel = new Label { Text = fileText, AutoSize = true, Anchor = AnchorStyles.Left, ForeColor = SystemColors.GrayText };
         layout.Controls.Add(fileLabel, 1, row);
         layout.SetColumnSpan(fileLabel, 2);
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Hash SHA-256:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+        _hashLabel = new Label { Dock = DockStyle.Fill, AutoSize = false, TextAlign = ContentAlignment.MiddleLeft, ForeColor = SystemColors.GrayText };
+        layout.Controls.Add(_hashLabel, 1, row);
+        layout.SetColumnSpan(_hashLabel, 2);
+        row++;
+
+        layout.Controls.Add(new Label(), 0, row);
+        var hashActionsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, AutoSize = true };
+        if (_isWebSourced)
+        {
+            // Two independent, always-visible actions rather than one
+            // toggle button that changes meaning by state (like the local
+            // case below) - explicitly requested so "regenerate" and
+            // "clear" are never ambiguous about which one just happened.
+            _regenerateHashButton = AppTheme.CreateButton("Regenerar hash");
+            _regenerateHashButton.Click += OnRegenerateHashClick;
+            _toolTip.SetToolTip(_regenerateHashButton, "Vuelve a descargar el archivo desde el mirror y recalcula su hash.");
+            _removeHashButton = AppTheme.CreateButton("Quitar hash");
+            _removeHashButton.Click += OnRemoveHashClick;
+            _toolTip.SetToolTip(_removeHashButton, "Deja de comprobar el hash de este programa al instalarlo.");
+            hashActionsPanel.Controls.Add(_regenerateHashButton);
+            hashActionsPanel.Controls.Add(_removeHashButton);
+        }
+        else
+        {
+            _hashButton = AppTheme.CreateButton(string.Empty);
+            _hashButton.Click += OnHashButtonClick;
+            hashActionsPanel.Controls.Add(_hashButton);
+        }
+        layout.Controls.Add(hashActionsPanel, 1, row);
+        layout.SetColumnSpan(hashActionsPanel, 2);
+        RefreshHashButton();
         row++;
 
         layout.Controls.Add(new Label { Text = "Nombre:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
@@ -158,24 +217,144 @@ public sealed class EditInstallerForm : Form
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.RightToLeft,
         };
-        var cancelButton = AppTheme.CreateButton("Cancelar");
-        cancelButton.DialogResult = DialogResult.Cancel;
-        var okButton = AppTheme.CreateButton("Guardar", primary: true);
-        okButton.DialogResult = DialogResult.OK;
-        okButton.Click += OnSave;
-        buttonsPanel.Controls.Add(cancelButton);
-        buttonsPanel.Controls.Add(okButton);
+        _cancelButton = AppTheme.CreateButton("Cancelar");
+        _cancelButton.DialogResult = DialogResult.Cancel;
+        _okButton = AppTheme.CreateButton("Guardar", primary: true);
+        _okButton.DialogResult = DialogResult.OK;
+        _okButton.Click += OnSave;
+        buttonsPanel.Controls.Add(_cancelButton);
+        buttonsPanel.Controls.Add(_okButton);
         layout.Controls.Add(buttonsPanel, 0, row);
         layout.SetColumnSpan(buttonsPanel, 3);
 
-        AcceptButton = okButton;
-        CancelButton = cancelButton;
+        AcceptButton = _okButton;
+        CancelButton = _cancelButton;
+        FormClosing += (_, e) =>
+        {
+            if (_regeneratingHash) e.Cancel = true;
+        };
 
         AppTheme.StyleForm(this);
     }
 
     private InstallerType SelectedType =>
         Enum.TryParse<InstallerType>(_typeCombo.SelectedItem as string, out var type) ? type : InstallerType.Unknown;
+
+    private void RefreshHashButton()
+    {
+        _hashLabel.Text = string.IsNullOrWhiteSpace(_pendingHash) ? "(sin fijar)" : _pendingHash;
+
+        if (_isWebSourced)
+        {
+            _removeHashButton!.Enabled = !string.IsNullOrWhiteSpace(_pendingHash);
+            return;
+        }
+
+        _hashButton!.Text = string.IsNullOrWhiteSpace(_pendingHash) ? "Calcular y fijar" : "Quitar hash";
+    }
+
+    private async void OnHashButtonClick(object? sender, EventArgs e)
+    {
+        if (!string.IsNullOrWhiteSpace(_pendingHash))
+        {
+            _pendingHash = null;
+            RefreshHashButton();
+            return;
+        }
+
+        var fullPath = Path.Combine(_folder, _entry.FileName);
+        if (!File.Exists(fullPath))
+        {
+            MessageBox.Show(this, "El archivo no está en la carpeta de instaladores.", "Archivo no encontrado",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        _hashButton!.Enabled = false;
+        try
+        {
+            _pendingHash = await Sha256Service.ComputeAsync(fullPath, CancellationToken.None);
+        }
+        catch (IOException ex)
+        {
+            MessageBox.Show(this, ex.Message, "No se pudo calcular el hash", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _hashButton.Enabled = true;
+            RefreshHashButton();
+        }
+    }
+
+    /// <summary>
+    /// Re-downloads straight from the mirror to a throwaway temp file (same
+    /// pattern as AddWebInstallerForm's "Comprobar mirror ahora") and
+    /// recomputes the hash - the only way to refresh a pinned hash for a web
+    /// entry, since there's no local file to hash directly.
+    /// </summary>
+    private async void OnRegenerateHashClick(object? sender, EventArgs e)
+    {
+        if (!Uri.TryCreate(_entry.MirrorUrl, UriKind.Absolute, out var uri))
+        {
+            MessageBox.Show(this, "La URL del mirror guardada no es válida.", "URL no válida",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var tempDir = Directory.CreateTempSubdirectory("megainstaller-rehash-").FullName;
+        _regeneratingHash = true;
+        _regenerateHashButton!.Enabled = false;
+        _removeHashButton!.Enabled = false;
+        _okButton.Enabled = false;
+        _cancelButton.Enabled = false;
+        _hashLabel.Text = "Descargando desde el mirror...";
+        _hashCts = new CancellationTokenSource();
+
+        try
+        {
+            using var downloadService = new DownloadService();
+            var destinationPath = Path.Combine(tempDir, _entry.FileName);
+            await downloadService.DownloadAsync(uri, destinationPath, null, _hashCts.Token);
+
+            var info = new FileInfo(destinationPath);
+            if (!info.Exists || info.Length == 0)
+            {
+                MessageBox.Show(this, "El mirror devolvió un archivo vacío.", "No se pudo regenerar",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            _pendingHash = await Sha256Service.ComputeAsync(destinationPath, _hashCts.Token);
+        }
+        catch (OperationCanceledException) when (_hashCts?.Token.IsCancellationRequested == true)
+        {
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException)
+        {
+            MessageBox.Show(this, ex.Message, "No se pudo regenerar el hash", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+        finally
+        {
+            _regeneratingHash = false;
+            _regenerateHashButton.Enabled = true;
+            _okButton.Enabled = true;
+            _cancelButton.Enabled = true;
+            RefreshHashButton();
+            try
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+        }
+    }
+
+    private void OnRemoveHashClick(object? sender, EventArgs e)
+    {
+        _pendingHash = null;
+        RefreshHashButton();
+    }
 
     private void OnSuggestArguments(object? sender, EventArgs e)
     {
@@ -233,6 +412,7 @@ public sealed class EditInstallerForm : Form
         }
 
         _entry.Name = _nameBox.Text.Trim();
+        _entry.ExpectedSha256 = _pendingHash;
         _entry.Type = SelectedType;
         _entry.Arguments = _argumentsBox.Text.Trim();
         _entry.TargetInstallDir = string.IsNullOrWhiteSpace(_installDirBox.Text) ? null : _installDirBox.Text.Trim();

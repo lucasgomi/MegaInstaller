@@ -58,6 +58,8 @@ public static class InstanceInstallPlanner
             Name = entry.Name,
             FileName = entry.FileName,
             SourceUrl = entry.SourceUrl,
+            MirrorUrl = entry.MirrorUrl,
+            ExpectedSha256 = entry.ExpectedSha256,
             Type = entry.Type,
             Arguments = newArguments,
             TargetInstallDir = overrideInstallDir,

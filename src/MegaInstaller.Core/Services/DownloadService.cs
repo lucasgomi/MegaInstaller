@@ -7,10 +7,28 @@ namespace MegaInstaller.Core.Services;
 public sealed class DownloadService : IDisposable
 {
     private readonly HttpClient _httpClient;
+    private readonly bool _ownsClient;
 
-    public DownloadService()
+    // HttpClient's default 100s Timeout aborts a real-world installer
+    // (100MB+ is common - Discord's own is 107MB) on anything but a fast
+    // connection, throwing a TaskCanceledException indistinguishable from a
+    // deliberate cancel unless callers check IsCancellationRequested (see
+    // AddWebInstallerForm/InstallProgressForm). Downloads are already
+    // cancellable and progress-reported via the caller's own
+    // CancellationToken, so nothing needs HttpClient's own opinionated cap.
+    public DownloadService() : this(new HttpClient { Timeout = Timeout.InfiniteTimeSpan }, ownsClient: true)
     {
-        _httpClient = new HttpClient();
+    }
+
+    /// <summary>Uses a caller-supplied client instead of owning one - for tests (a fake handler) or to share a client elsewhere. Never disposed by this instance.</summary>
+    public DownloadService(HttpClient httpClient) : this(httpClient, ownsClient: false)
+    {
+    }
+
+    private DownloadService(HttpClient httpClient, bool ownsClient)
+    {
+        _httpClient = httpClient;
+        _ownsClient = ownsClient;
     }
 
     public async Task DownloadAsync(

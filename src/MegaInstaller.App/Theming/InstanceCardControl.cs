@@ -21,7 +21,9 @@ public sealed class InstanceCardControl : Control
     private readonly string _name;
     private readonly string _description;
     private readonly Image? _icon;
+    private readonly bool _isCustomIcon;
     private readonly int _programCount;
+    private readonly bool _hasWebInstallers;
     private readonly Color _accentColor;
     private readonly bool _isAddTile;
 
@@ -39,13 +41,15 @@ public sealed class InstanceCardControl : Control
         }
     }
 
-    private InstanceCardControl(string? instanceId, string name, string description, Image? icon, int programCount, Color accentColor, bool isAddTile)
+    private InstanceCardControl(string? instanceId, string name, string description, Image? icon, bool isCustomIcon, int programCount, bool hasWebInstallers, Color accentColor, bool isAddTile)
     {
         InstanceId = instanceId;
         _name = name;
         _description = description;
         _icon = icon;
+        _isCustomIcon = isCustomIcon;
         _programCount = programCount;
+        _hasWebInstallers = hasWebInstallers;
         _accentColor = accentColor;
         _isAddTile = isAddTile;
 
@@ -55,17 +59,19 @@ public sealed class InstanceCardControl : Control
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
     }
 
-    public static InstanceCardControl ForInstance(InstanceDefinition instance, int programCount, string folder) => new(
+    public static InstanceCardControl ForInstance(InstanceDefinition instance, int programCount, bool hasWebInstallers, string folder) => new(
         instance.Id,
         instance.Name,
         instance.Description,
         InstanceIconCatalog.LoadForInstance(instance.IconKey, folder),
+        InstanceIconCatalog.IsCustomKey(instance.IconKey),
         programCount,
+        hasWebInstallers,
         InstanceColorPalette.Resolve(instance.ColorHex, ModernPalette.Accent),
         isAddTile: false);
 
     public static InstanceCardControl CreateAddTile() =>
-        new(null, "Nueva instancia", string.Empty, null, 0, ModernPalette.Accent, isAddTile: true);
+        new(null, "Nueva instancia", string.Empty, null, false, 0, false, ModernPalette.Accent, isAddTile: true);
 
     protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
 
@@ -122,19 +128,40 @@ public sealed class InstanceCardControl : Control
         const int pad = 14;
         if (_icon is not null)
         {
+            var iconBadgeRect = new Rectangle(pad - 4, pad - 4, 40, 40);
             using (var badgeBrush = new SolidBrush(InstanceColorPalette.Tint(_accentColor)))
             {
-                g.FillEllipse(badgeBrush, pad - 4, pad - 4, 40, 40);
+                g.FillEllipse(badgeBrush, iconBadgeRect);
             }
 
-            // A circular mask puts every icon through the same frame,
-            // built-in glyph or an arbitrary custom photo alike, instead of
-            // a photo's square corners poking out of the round badge.
-            var iconRect = new Rectangle(pad, pad, 32, 32);
-            using var scaledIcon = ScaleIcon(_icon, iconRect.Size);
-            using var iconBrush = new TextureBrush(scaledIcon, WrapMode.Clamp);
-            iconBrush.TranslateTransform(iconRect.X, iconRect.Y);
-            g.FillEllipse(iconBrush, iconRect);
+            using var clipPath = new GraphicsPath();
+            clipPath.AddEllipse(iconBadgeRect);
+            var previousClip = g.Clip;
+            g.SetClip(clipPath, CombineMode.Replace);
+
+            if (_isCustomIcon)
+            {
+                // A custom upload is already pre-cropped to a square for
+                // exactly this (see ImageCropForm), so it can cover the
+                // whole badge edge to edge like any circular avatar photo.
+                g.DrawImage(_icon, iconBadgeRect);
+            }
+            else
+            {
+                // Built-in glyphs are drawn close to their full square
+                // canvas, so covering the badge edge to edge clipped them
+                // against the circle wherever their ink reached a corner
+                // (e.g. a folder icon's tab). Drawing them smaller and
+                // centred keeps the whole glyph inside the circle instead.
+                const int glyphSize = 24;
+                var glyphRect = new Rectangle(
+                    iconBadgeRect.X + (iconBadgeRect.Width - glyphSize) / 2,
+                    iconBadgeRect.Y + (iconBadgeRect.Height - glyphSize) / 2,
+                    glyphSize, glyphSize);
+                g.DrawImage(_icon, glyphRect);
+            }
+
+            g.Clip = previousClip;
         }
 
         using var nameFont = new Font(Font.FontFamily, 10.5F, FontStyle.Bold);
@@ -155,7 +182,15 @@ public sealed class InstanceCardControl : Control
         var badgeText = _programCount == 1 ? "1 programa" : $"{_programCount} programas";
         using var badgeFont = new Font(Font.FontFamily, 8F);
         var badgeSize = g.MeasureString(badgeText, badgeFont);
-        var badgeRect = new RectangleF(pad, Height - pad - 20, badgeSize.Width + 14, 20);
+
+        // A small web glyph (never an emoji - it'd clash with every other
+        // instance colour) marks a pack that downloads part of itself at
+        // install time instead of carrying every file locally.
+        const int webIconSize = 11;
+        var webIcon = _hasWebInstallers ? InstanceIconCatalog.Load("globe2") : null;
+        var webIconSlot = webIcon is not null ? webIconSize + 6 : 0;
+
+        var badgeRect = new RectangleF(pad, Height - pad - 20, badgeSize.Width + 14 + webIconSlot, 20);
         using var badgePath = RoundedRect(badgeRect, 10f);
         using (var badgeBrush = new SolidBrush(InstanceColorPalette.Tint(_accentColor)))
         {
@@ -165,6 +200,15 @@ public sealed class InstanceCardControl : Control
         using (var badgeTextBrush = new SolidBrush(_accentColor))
         {
             g.DrawString(badgeText, badgeFont, badgeTextBrush, badgeRect.X + 7, badgeRect.Y + 3);
+        }
+
+        if (webIcon is not null)
+        {
+            var webIconRect = new Rectangle(
+                (int)(badgeRect.X + 7 + badgeSize.Width + 4),
+                (int)(badgeRect.Y + (badgeRect.Height - webIconSize) / 2),
+                webIconSize, webIconSize);
+            g.DrawImage(webIcon, webIconRect);
         }
     }
 
@@ -178,16 +222,6 @@ public sealed class InstanceCardControl : Control
         using var captionFont = new Font(Font.FontFamily, 9F);
         var capSize = g.MeasureString(_name, captionFont);
         g.DrawString(_name, captionFont, textBrush, (Width - capSize.Width) / 2, 82);
-    }
-
-    private static Bitmap ScaleIcon(Image source, Size size)
-    {
-        var scaled = new Bitmap(size.Width, size.Height);
-        using var g = Graphics.FromImage(scaled);
-        g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-        g.PixelOffsetMode = PixelOffsetMode.HighQuality;
-        g.DrawImage(source, new Rectangle(0, 0, size.Width, size.Height));
-        return scaled;
     }
 
     private static GraphicsPath RoundedRect(RectangleF rect, float radius)

@@ -23,6 +23,10 @@ public sealed class InstallerLibraryForm : Form
     private readonly CheckBox _stopOnErrorCheck;
     private readonly CheckBox _elevateCheck;
     private readonly TextBox _searchBox;
+    private readonly ComboBox _sourceFilterCombo;
+    private readonly ComboBox _typeFilterCombo;
+    private readonly ComboBox _adminFilterCombo;
+    private readonly ComboBox _hashFilterCombo;
     private readonly ToolTip _toolTip = new();
 
     public bool ManifestChanged { get; private set; }
@@ -35,14 +39,21 @@ public sealed class InstallerLibraryForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(1040, 640);
+        ClientSize = new Size(1040, 716);
 
         _manifest = LoadManifest();
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5 };
         // Button rows have to fit the button's whole footprint (height plus
         // its top/bottom margins) or the FlowLayoutPanel clips it at the bottom.
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
+        // Real rendered widths for 4 label+combo pairs plus a button can't be
+        // measured from this Linux dev box, so instead of re-guessing a
+        // single-line width, this row is tall enough for the filter panel to
+        // wrap to a second line (WrapContents=true below) if it doesn't fit -
+        // that way nothing can end up pushed past the visible area no matter
+        // how far off a width estimate turns out to be on a real machine.
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 50));
@@ -57,20 +68,63 @@ public sealed class InstallerLibraryForm : Form
         searchPanel.Controls.Add(_searchBox, 1, 0);
         root.Controls.Add(searchPanel, 0, 0);
 
+        var filterPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = true, Padding = new Padding(8, 4, 8, 4) };
+
+        filterPanel.Controls.Add(new Label { Text = "Fuente:", AutoSize = true, Margin = new Padding(0, 8, 4, 0) });
+        _sourceFilterCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110, Margin = new Padding(0, 5, 14, 0) };
+        _sourceFilterCombo.Items.AddRange(new object[] { "Todas", "Solo web", "Solo locales" });
+        _sourceFilterCombo.SelectedIndex = 0;
+        _sourceFilterCombo.SelectedIndexChanged += (_, _) => RefreshGrid();
+        filterPanel.Controls.Add(_sourceFilterCombo);
+
+        filterPanel.Controls.Add(new Label { Text = "Tipo:", AutoSize = true, Margin = new Padding(0, 8, 4, 0) });
+        _typeFilterCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130, Margin = new Padding(0, 5, 14, 0) };
+        _typeFilterCombo.Items.Add("Todos los tipos");
+        _typeFilterCombo.Items.AddRange(Enum.GetNames<InstallerType>());
+        _typeFilterCombo.SelectedIndex = 0;
+        _typeFilterCombo.SelectedIndexChanged += (_, _) => RefreshGrid();
+        filterPanel.Controls.Add(_typeFilterCombo);
+
+        filterPanel.Controls.Add(new Label { Text = "Admin:", AutoSize = true, Margin = new Padding(0, 8, 4, 0) });
+        _adminFilterCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 140, Margin = new Padding(0, 5, 14, 0) };
+        _adminFilterCombo.Items.AddRange(new object[] { "Todos", "Solo con admin", "Solo sin admin" });
+        _adminFilterCombo.SelectedIndex = 0;
+        _adminFilterCombo.SelectedIndexChanged += (_, _) => RefreshGrid();
+        filterPanel.Controls.Add(_adminFilterCombo);
+
+        filterPanel.Controls.Add(new Label { Text = "Hash:", AutoSize = true, Margin = new Padding(0, 8, 4, 0) });
+        _hashFilterCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150, Margin = new Padding(0, 5, 14, 0) };
+        _hashFilterCombo.Items.AddRange(new object[] { "Todos", "Con hash fijado", "Sin hash fijado" });
+        _hashFilterCombo.SelectedIndex = 0;
+        _hashFilterCombo.SelectedIndexChanged += (_, _) => RefreshGrid();
+        filterPanel.Controls.Add(_hashFilterCombo);
+
+        var clearFiltersButton = AppTheme.CreateButton("Limpiar filtros");
+        clearFiltersButton.Margin = new Padding(4, 5, 4, 0);
+        clearFiltersButton.Click += OnClearFilters;
+        filterPanel.Controls.Add(clearFiltersButton);
+
+        root.Controls.Add(filterPanel, 0, 1);
+
         var actionsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 4, 8, 4) };
-        var addFileButton = MakeButton("Añadir archivo(s)...", OnAddFile);
-        var addUrlButton = MakeButton("Añadir desde URL...", OnAddFromUrl);
-        var importButton = MakeButton("Importar de la carpeta", OnImportFound);
+
+        var addMenu = new ContextMenuStrip();
+        addMenu.Items.Add(AppTheme.CreateMenuItem("Añadir archivo(s)...", OnAddFile));
+        addMenu.Items.Add(AppTheme.CreateMenuItem("Añadir desde URL...", OnAddFromUrl));
+        addMenu.Items.Add(AppTheme.CreateMenuItem("Añadir instalador web...", OnAddWebInstaller));
+        addMenu.Items.Add(AppTheme.CreateMenuItem("Importar de la carpeta", OnImportFound));
+        actionsPanel.Controls.Add(AppTheme.CreateDropdownButton("Añadir", addMenu, primary: true));
+
         var detectButton = MakeButton("Detectar tipo", OnDetectType);
         var editButton = MakeButton("Editar...", OnEdit);
         var bulkEditButton = MakeButton("Editar marcados...", OnBulkEdit);
         _toolTip.SetToolTip(bulkEditButton, "Edita a la vez los programas con la casilla marcada en la columna izquierda de la tabla.");
-        var removeButton = MakeButton("Quitar", OnRemove);
-        actionsPanel.Controls.AddRange(new Control[] { addFileButton, addUrlButton, importButton, detectButton, editButton, bulkEditButton, removeButton });
-        root.Controls.Add(actionsPanel, 0, 1);
+        var removeButton = MakeButton("Eliminar", OnRemove);
+        actionsPanel.Controls.AddRange(new Control[] { detectButton, editButton, bulkEditButton, removeButton });
+        root.Controls.Add(actionsPanel, 0, 2);
 
         _grid = BuildGrid();
-        root.Controls.Add(_grid, 0, 2);
+        root.Controls.Add(_grid, 0, 3);
 
         var installPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 6, 8, 6) };
         var installSelectedButton = MakeButton("Instalar seleccionados", OnInstallSelected, primary: true);
@@ -85,7 +139,7 @@ public sealed class InstallerLibraryForm : Form
             Enabled = !ElevationProbe.IsProcessElevated(),
         };
         installPanel.Controls.AddRange(new Control[] { installSelectedButton, installAllButton, _stopOnErrorCheck, _elevateCheck });
-        root.Controls.Add(installPanel, 0, 3);
+        root.Controls.Add(installPanel, 0, 4);
 
         RefreshGrid();
         AppTheme.StyleForm(this);
@@ -142,6 +196,32 @@ public sealed class InstallerLibraryForm : Form
         };
         grid.CellValueChanged += (_, e) => { if (e.RowIndex >= 0) SaveManifest(); };
 
+        var rowMenu = new ContextMenuStrip();
+        rowMenu.Items.Add(AppTheme.CreateMenuItem("Editar...", OnEdit));
+        rowMenu.Items.Add(AppTheme.CreateMenuItem("Renombrar...", OnRenameSelected));
+        rowMenu.Items.Add(AppTheme.CreateMenuItem("Eliminar", OnRemove));
+        grid.ContextMenuStrip = rowMenu;
+        // A right-click outside the current (possibly multi-row) selection
+        // selects just that row first, matching Explorer; a right-click
+        // inside an existing selection leaves it alone so "Eliminar" can
+        // still act on the whole selection.
+        grid.CellMouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Right || e.RowIndex < 0 || grid.Rows[e.RowIndex].Selected) return;
+            grid.ClearSelection();
+            grid.Rows[e.RowIndex].Selected = true;
+        };
+        // The natural expected shortcut for "delete the selection" - the
+        // grid isn't in edit mode for a plain Delete press (that would need
+        // F2/a click first), so this can't collide with in-cell text editing.
+        grid.KeyDown += (_, e) =>
+        {
+            if (e.KeyCode == Keys.Delete)
+            {
+                OnRemove(grid, EventArgs.Empty);
+            }
+        };
+
         return grid;
     }
 
@@ -179,8 +259,44 @@ public sealed class InstallerLibraryForm : Form
                 TagUtils.MatchesAny(i.Tags, search));
         }
 
+        query = _sourceFilterCombo.SelectedIndex switch
+        {
+            1 => query.Where(i => !string.IsNullOrWhiteSpace(i.MirrorUrl)),
+            2 => query.Where(i => string.IsNullOrWhiteSpace(i.MirrorUrl)),
+            _ => query,
+        };
+
+        if (_typeFilterCombo.SelectedIndex > 0)
+        {
+            var type = Enum.Parse<InstallerType>((string)_typeFilterCombo.Items[_typeFilterCombo.SelectedIndex]!);
+            query = query.Where(i => i.Type == type);
+        }
+
+        query = _adminFilterCombo.SelectedIndex switch
+        {
+            1 => query.Where(i => i.RunAsAdmin),
+            2 => query.Where(i => !i.RunAsAdmin),
+            _ => query,
+        };
+
+        query = _hashFilterCombo.SelectedIndex switch
+        {
+            1 => query.Where(i => !string.IsNullOrWhiteSpace(i.ExpectedSha256)),
+            2 => query.Where(i => string.IsNullOrWhiteSpace(i.ExpectedSha256)),
+            _ => query,
+        };
+
         var rows = new BindingList<InstallerRow>(query.Select(i => new InstallerRow(i, _folder)).ToList());
         _grid.DataSource = rows;
+    }
+
+    private void OnClearFilters(object? sender, EventArgs e)
+    {
+        _searchBox.Clear();
+        _sourceFilterCombo.SelectedIndex = 0;
+        _typeFilterCombo.SelectedIndex = 0;
+        _adminFilterCombo.SelectedIndex = 0;
+        _hashFilterCombo.SelectedIndex = 0;
     }
 
     private IEnumerable<InstallerRow> GridRows => ((BindingList<InstallerRow>?)_grid.DataSource) ?? Enumerable.Empty<InstallerRow>();
@@ -248,7 +364,7 @@ public sealed class InstallerLibraryForm : Form
             Order = (_manifest.Items.Count + 1) * 10,
         };
 
-        using var editForm = new EditInstallerForm(entry, _manifest.Instances);
+        using var editForm = new EditInstallerForm(entry, _manifest.Instances, _folder);
         editForm.ShowDialog(this);
 
         _manifest.Items.Add(entry);
@@ -273,12 +389,76 @@ public sealed class InstallerLibraryForm : Form
             Order = (_manifest.Items.Count + 1) * 10,
         };
 
-        using var editForm = new EditInstallerForm(entry, _manifest.Instances);
+        using var editForm = new EditInstallerForm(entry, _manifest.Instances, _folder);
         editForm.ShowDialog(this);
 
         _manifest.Items.Add(entry);
         SaveManifest();
         RefreshGrid();
+    }
+
+    private void OnAddWebInstaller(object? sender, EventArgs e)
+    {
+        using var dialog = new AddWebInstallerForm();
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        if (_manifest.Items.Any(i => string.Equals(i.FileName, dialog.FileName, StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(i.MirrorUrl)))
+        {
+            MessageBox.Show(this, $"Ya hay un instalador web con el nombre de archivo \"{dialog.FileName}\".",
+                "Ya existe", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        var entry = new InstallerEntry
+        {
+            Name = dialog.EntryName,
+            FileName = dialog.FileName,
+            MirrorUrl = dialog.MirrorUrl,
+            ExpectedSha256 = dialog.PinnedSha256,
+            Type = dialog.SelectedType,
+            Arguments = SilentArgsCatalog.GetSuggestedArguments(dialog.SelectedType),
+            Order = (_manifest.Items.Count + 1) * 10,
+        };
+
+        using var editForm = new EditInstallerForm(entry, _manifest.Instances, _folder);
+        editForm.ShowDialog(this);
+
+        _manifest.Items.Add(entry);
+        ApplyExtractedIconIfUseful(dialog.ExtractedIcon, entry.Id);
+        SaveManifest();
+        RefreshGrid();
+    }
+
+    /// <summary>
+    /// Saves the icon auto-extracted from a web installer's real bytes (see
+    /// AddWebInstallerForm.ExtractedIcon) under CustomTheme and applies it as
+    /// the card icon of whichever single instance this entry ended up
+    /// belonging to - only when membership is unambiguous (exactly one
+    /// instance, the common "this web app IS this instance" case) and that
+    /// instance has no icon of its own yet, so a deliberate choice is never
+    /// silently overridden.
+    /// </summary>
+    private void ApplyExtractedIconIfUseful(Image? icon, string entryId)
+    {
+        if (icon is null) return;
+
+        var memberInstances = _manifest.Instances.Where(i => i.InstallerIds.Contains(entryId)).ToList();
+        if (memberInstances.Count != 1 || !string.IsNullOrWhiteSpace(memberInstances[0].IconKey))
+        {
+            return;
+        }
+
+        try
+        {
+            var directory = Path.Combine(_folder, InstanceIconCatalog.CustomThemeFolderName);
+            Directory.CreateDirectory(directory);
+            var fileName = $"{Guid.NewGuid():N}.png";
+            icon.Save(Path.Combine(directory, fileName), System.Drawing.Imaging.ImageFormat.Png);
+            memberInstances[0].IconKey = InstanceIconCatalog.CustomKey(fileName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     private void OnImportFound(object? sender, EventArgs e)
@@ -341,12 +521,35 @@ public sealed class InstallerLibraryForm : Form
             return;
         }
 
-        using var editForm = new EditInstallerForm(row.Entry, _manifest.Instances);
+        using var editForm = new EditInstallerForm(row.Entry, _manifest.Instances, _folder);
         if (editForm.ShowDialog(this) == DialogResult.OK)
         {
             row.RefreshAll();
             SaveManifest();
         }
+    }
+
+    private void OnRenameSelected(object? sender, EventArgs e)
+    {
+        var rows = _grid.SelectedRows.Cast<DataGridViewRow>()
+            .Select(r => r.DataBoundItem as InstallerRow)
+            .Where(r => r is not null)
+            .Cast<InstallerRow>()
+            .ToList();
+
+        if (rows.Count != 1)
+        {
+            MessageBox.Show(this, "Selecciona un único programa para renombrar.", "Nada seleccionado",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var renameForm = new RenameForm("Renombrar programa", rows[0].Entry.Name);
+        if (renameForm.ShowDialog(this) != DialogResult.OK) return;
+
+        rows[0].Entry.Name = renameForm.NewName;
+        rows[0].RefreshAll();
+        SaveManifest();
     }
 
     private void OnBulkEdit(object? sender, EventArgs e)
@@ -381,14 +584,14 @@ public sealed class InstallerLibraryForm : Form
 
         if (rows.Count == 0)
         {
-            MessageBox.Show(this, "Selecciona uno o más instaladores para quitar.", "Nada seleccionado",
+            MessageBox.Show(this, "Selecciona uno o más instaladores para eliminar.", "Nada seleccionado",
                 MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
 
         var choice = MessageBox.Show(this,
-            $"¿Quitar {rows.Count} elemento(s) de la lista? El archivo no se borrará del disco. También se quitarán de cualquier instancia que los use.",
-            "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            $"¿Eliminar {rows.Count} elemento(s) de la lista? El archivo no se borrará del disco. También se quitarán de cualquier instancia que los use.",
+            "Confirmar eliminación", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
         if (choice != DialogResult.Yes) return;
 
         foreach (var row in rows)

@@ -52,6 +52,32 @@ public static class AppTheme
         return button;
     }
 
+    /// <summary>
+    /// A button that shows a dropdown menu below itself instead of firing
+    /// directly - used to group several related actions (e.g. Nueva/Editar/
+    /// Eliminar instancia) behind one button instead of a row of separate ones.
+    /// </summary>
+    public static Button CreateDropdownButton(string text, ContextMenuStrip menu, bool primary = false)
+    {
+        var button = CreateButton($"{text}  ▾", primary);
+        button.Click += (_, _) => menu.Show(button, new Point(0, button.Height + 2));
+        return button;
+    }
+
+    /// <summary>
+    /// A menu item for a dropdown/context menu. Deliberately plain - two
+    /// rounds of custom Modern styling here (rounded corners, then just
+    /// color/padding/font) both still read as misaligned, so this now
+    /// renders with WinForms' own untouched default, which is already the
+    /// native Windows look the same way File Explorer's menus are.
+    /// </summary>
+    public static ToolStripMenuItem CreateMenuItem(string text, EventHandler handler)
+    {
+        var item = new ToolStripMenuItem(text);
+        item.Click += handler;
+        return item;
+    }
+
     private static Bitmap ScaleIcon(Image source, int size)
     {
         var scaled = new Bitmap(size, size);
