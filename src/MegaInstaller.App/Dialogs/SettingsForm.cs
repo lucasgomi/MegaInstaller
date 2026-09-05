@@ -42,7 +42,7 @@ public sealed class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(560, 552);
+        ClientSize = new Size(560, 568);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(16), ColumnCount = 1, RowCount = 14 };
         // RowStyles is positional (RowStyles[i] = row i); declare all of
@@ -62,7 +62,9 @@ public sealed class SettingsForm : Form
         // every other single-button row in this same form (see above); a
         // narrower row clips the button instead of fitting around it.
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        // Taller than a plain button row: the status text can run up to a
+        // couple of wrapped lines (e.g. the "no se encontró el .exe..." message).
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         Controls.Add(root);
@@ -166,10 +168,14 @@ public sealed class SettingsForm : Form
         updateStatusPanel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         _updateStatusLabel = new Label
         {
+            // Dock alone: WinForms' Anchor setter resets Dock to None as a
+            // side effect, so also setting Anchor here (as this used to)
+            // silently undid the Fill and left the label stuck at its tiny
+            // ~100x23px AutoSize=false default - which is what clipped the
+            // sentence instead of letting it fill the column and wrap.
             Dock = DockStyle.Fill,
             AutoSize = false,
             ForeColor = SystemColors.GrayText,
-            Anchor = AnchorStyles.Left,
             Text = "Pulsa \"Buscar actualizaciones\" para comprobar si hay una versión más reciente.",
         };
         _installUpdateButton = AppTheme.CreateButton("Instalar actualización", primary: true);
