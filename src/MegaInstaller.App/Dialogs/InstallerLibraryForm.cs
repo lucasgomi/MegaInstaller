@@ -313,8 +313,41 @@ public sealed class InstallerLibraryForm : Form
         editForm.ShowDialog(this);
 
         _manifest.Items.Add(entry);
+        ApplyExtractedIconIfUseful(dialog.ExtractedIcon, entry.Id);
         SaveManifest();
         RefreshGrid();
+    }
+
+    /// <summary>
+    /// Saves the icon auto-extracted from a web installer's real bytes (see
+    /// AddWebInstallerForm.ExtractedIcon) under CustomTheme and applies it as
+    /// the card icon of whichever single instance this entry ended up
+    /// belonging to - only when membership is unambiguous (exactly one
+    /// instance, the common "this web app IS this instance" case) and that
+    /// instance has no icon of its own yet, so a deliberate choice is never
+    /// silently overridden.
+    /// </summary>
+    private void ApplyExtractedIconIfUseful(Image? icon, string entryId)
+    {
+        if (icon is null) return;
+
+        var memberInstances = _manifest.Instances.Where(i => i.InstallerIds.Contains(entryId)).ToList();
+        if (memberInstances.Count != 1 || !string.IsNullOrWhiteSpace(memberInstances[0].IconKey))
+        {
+            return;
+        }
+
+        try
+        {
+            var directory = Path.Combine(_folder, InstanceIconCatalog.CustomThemeFolderName);
+            Directory.CreateDirectory(directory);
+            var fileName = $"{Guid.NewGuid():N}.png";
+            icon.Save(Path.Combine(directory, fileName), System.Drawing.Imaging.ImageFormat.Png);
+            memberInstances[0].IconKey = InstanceIconCatalog.CustomKey(fileName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     private void OnImportFound(object? sender, EventArgs e)

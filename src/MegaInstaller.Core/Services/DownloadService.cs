@@ -9,7 +9,14 @@ public sealed class DownloadService : IDisposable
     private readonly HttpClient _httpClient;
     private readonly bool _ownsClient;
 
-    public DownloadService() : this(new HttpClient(), ownsClient: true)
+    // HttpClient's default 100s Timeout aborts a real-world installer
+    // (100MB+ is common - Discord's own is 107MB) on anything but a fast
+    // connection, throwing a TaskCanceledException indistinguishable from a
+    // deliberate cancel unless callers check IsCancellationRequested (see
+    // AddWebInstallerForm/InstallProgressForm). Downloads are already
+    // cancellable and progress-reported via the caller's own
+    // CancellationToken, so nothing needs HttpClient's own opinionated cap.
+    public DownloadService() : this(new HttpClient { Timeout = Timeout.InfiniteTimeSpan }, ownsClient: true)
     {
     }
 

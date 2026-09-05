@@ -382,6 +382,18 @@ public sealed class MainForm : Form
             card.Click += (_, _) => SelectCard(card.InstanceId);
             // Double-click installs; editing has its own explicit menu entry.
             card.DoubleClick += (_, _) => { SelectCard(card.InstanceId); OnInstallInstance(this, EventArgs.Empty); };
+
+            var cardMenu = new ContextMenuStrip();
+            cardMenu.Items.Add(AppTheme.CreateMenuItem("Modificar...", OnEditInstance));
+            cardMenu.Items.Add(AppTheme.CreateMenuItem("Renombrar...", OnRenameInstance));
+            cardMenu.Items.Add(AppTheme.CreateMenuItem("Borrar", OnRemoveInstance));
+            AppTheme.StyleContextMenu(cardMenu);
+            // Right-click has to select this card first (MouseDown always
+            // precedes the menu's own MouseUp-triggered popup), or the menu
+            // would act on whichever card was selected before.
+            card.MouseDown += (_, e) => { if (e.Button == MouseButtons.Right) SelectCard(card.InstanceId); };
+            card.ContextMenuStrip = cardMenu;
+
             flow.Controls.Add(card);
         }
 
@@ -508,6 +520,24 @@ public sealed class MainForm : Form
         }
     }
 
+    private void OnRenameInstance(object? sender, EventArgs e)
+    {
+        var row = SelectedRow();
+        if (row is null)
+        {
+            MessageBox.Show(this, "Selecciona una instancia para renombrar.", "Nada seleccionado",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var renameForm = new RenameInstanceForm(row.Instance.Name);
+        if (renameForm.ShowDialog(this) != DialogResult.OK) return;
+
+        row.Instance.Name = renameForm.NewName;
+        SaveManifest();
+        RefreshGrid();
+    }
+
     private void OnRemoveInstance(object? sender, EventArgs e)
     {
         var row = SelectedRow();
@@ -525,8 +555,36 @@ public sealed class MainForm : Form
 
         _manifest.Instances.Remove(row.Instance);
         if (_selectedInstanceId == row.Instance.Id) _selectedInstanceId = null;
+        DeleteCustomIconIfOrphaned(row.Instance.IconKey);
         SaveManifest();
         RefreshGrid();
+    }
+
+    /// <summary>
+    /// Deletes a custom icon file (e.g. one auto-extracted from a web
+    /// installer, or manually uploaded) once nothing references it anymore -
+    /// otherwise CustomTheme would just accumulate orphaned files every time
+    /// an instance using one gets deleted.
+    /// </summary>
+    private void DeleteCustomIconIfOrphaned(string? iconKey)
+    {
+        if (!InstanceIconCatalog.IsCustomKey(iconKey)) return;
+        if (_manifest.Instances.Any(i => i.IconKey == iconKey)) return;
+
+        var fileName = CustomIconPaths.FileNameFromKey(iconKey);
+        if (fileName is null) return;
+
+        try
+        {
+            var path = Path.Combine(_folder, InstanceIconCatalog.CustomThemeFolderName, fileName);
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     private void OnInstallInstance(object? sender, EventArgs e)

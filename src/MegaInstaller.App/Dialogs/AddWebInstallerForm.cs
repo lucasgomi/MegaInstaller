@@ -27,6 +27,7 @@ public sealed class AddWebInstallerForm : Form
     private CancellationTokenSource? _cts;
     private bool _typeManuallySet;
     private bool _isAutoDetecting;
+    private Image? _extractedIcon;
 
     public string EntryName => _nameBox.Text.Trim();
     public string MirrorUrl => _urlBox.Text.Trim();
@@ -34,6 +35,14 @@ public sealed class AddWebInstallerForm : Form
     public InstallerType SelectedType =>
         Enum.TryParse<InstallerType>(_typeCombo.SelectedItem as string, out var type) ? type : InstallerType.Unknown;
     public string? PinnedSha256 => _pinHashCheck.Enabled && _pinHashCheck.Checked ? _verifiedHash : null;
+
+    /// <summary>
+    /// The icon extracted from the mirror's real bytes during "Comprobar
+    /// mirror ahora", if any - an in-memory copy that survives the temp
+    /// file's own cleanup, for the caller to save under CustomTheme once it
+    /// knows which instance(s) this entry ends up belonging to.
+    /// </summary>
+    public Image? ExtractedIcon => _extractedIcon;
 
     public AddWebInstallerForm()
     {
@@ -247,6 +256,13 @@ public sealed class AddWebInstallerForm : Form
             _pinHashCheck.Enabled = true;
             _pinHashCheck.Checked = true;
 
+            // Best-effort: extracted from the PE resource section directly,
+            // so the file's overall size doesn't matter. Reads into an
+            // independent in-memory bitmap (see IconExtractor), so it
+            // survives this method's own temp-file cleanup below.
+            _extractedIcon?.Dispose();
+            _extractedIcon = IconExtractor.TryExtract(destinationPath);
+
             // Only extension-based detection was possible before this point
             // (there was no file yet); now the real bytes are on disk, so a
             // byte-marker family (Inno/NSIS/Squirrel/...) can actually be
@@ -263,12 +279,17 @@ public sealed class AddWebInstallerForm : Form
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (_cts?.Token.IsCancellationRequested == true)
         {
             _statusLabel.Text = "Comprobación cancelada.";
         }
-        catch (Exception ex) when (ex is HttpRequestException or IOException)
+        catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException)
         {
+            // OperationCanceledException lands here too when it wasn't the
+            // user's own token (e.g. a stalled connection) - see
+            // DownloadService's comment on why that's no longer a timeout,
+            // but staying defensive here means it's reported honestly
+            // instead of being mislabeled as "cancelada" like before.
             _statusLabel.ForeColor = Color.Firebrick;
             _statusLabel.Text = $"No se pudo comprobar: {ex.Message}";
         }

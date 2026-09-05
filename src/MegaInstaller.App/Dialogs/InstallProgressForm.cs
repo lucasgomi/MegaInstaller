@@ -193,9 +193,16 @@ public sealed class InstallProgressForm : Form
                     {
                         result = await _webCacheService.DownloadAsync(entry, cacheFolder, null, _cts!.Token);
                     }
-                    catch (OperationCanceledException)
+                    catch (OperationCanceledException) when (_cts!.Token.IsCancellationRequested)
                     {
                         return false;
+                    }
+                    catch (OperationCanceledException ex)
+                    {
+                        // Not our own token (see DownloadService's comment) -
+                        // treat like any other download failure instead of
+                        // silently aborting the whole batch.
+                        result = WebDownloadResult.Failed(entry, ex.Message);
                     }
 
                     if (result.Outcome == WebDownloadOutcome.Success)

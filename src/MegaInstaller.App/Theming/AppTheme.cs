@@ -77,25 +77,29 @@ public static class AppTheme
             // own rounded corners and border - a bit more room on every
             // side matches how the rest of the Modern theme breathes.
             item.Padding = new Padding(10, 6, 14, 6);
-            item.Margin = new Padding(4, 2, 4, 2);
+            // Horizontal margin here insets the selection highlight from the
+            // menu's own edges unevenly per item - only vertical breathing
+            // room between stacked items is worth keeping.
+            item.Margin = new Padding(0, 2, 0, 2);
         }
 
         return item;
     }
 
     /// <summary>Styles a dropdown menu to match the Modern palette; no-op in Classic, where native rendering is already correct.</summary>
-    private static void StyleContextMenu(ContextMenuStrip menu)
+    internal static void StyleContextMenu(ContextMenuStrip menu)
     {
         if (!IsModern) return;
 
         menu.Renderer = new ToolStripProfessionalRenderer(new ModernMenuColorTable());
         menu.ShowImageMargin = false;
         menu.Font = new Font(menu.Font.FontFamily, 9.5F);
-        menu.Padding = new Padding(4);
-        // Same Windows 11 corner rounding the rest of the Modern theme's
-        // windows get - a ContextMenuStrip's popup otherwise renders as a
-        // plain square WS_POPUP window with no native styling of its own.
-        WindowChrome.ApplyRoundedCorners(menu);
+        // Deliberately no outer menu.Padding and no DWM rounded corners here
+        // (both tried previously): ToolStripDropDownMenu computes its own
+        // padding from ShowImageMargin/the image-margin gutter internally,
+        // so forcing a Padding on top of that fought its layout and read as
+        // crooked/uneven item alignment - a native square popup with just
+        // the color/font polish looks cleaner than fighting that.
     }
 
     private sealed class ModernMenuColorTable : ProfessionalColorTable
