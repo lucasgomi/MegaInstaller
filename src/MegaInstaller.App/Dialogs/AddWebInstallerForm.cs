@@ -246,6 +246,22 @@ public sealed class AddWebInstallerForm : Form
             _statusLabel.Text = $"Mirror accesible. Tamaño: {FormatBytes(info.Length)}.";
             _pinHashCheck.Enabled = true;
             _pinHashCheck.Checked = true;
+
+            // Only extension-based detection was possible before this point
+            // (there was no file yet); now the real bytes are on disk, so a
+            // byte-marker family (Inno/NSIS/Squirrel/...) can actually be
+            // sniffed - same rule as always: never overrides a manual pick.
+            if (!_typeManuallySet)
+            {
+                var detected = InstallerTypeDetector.Detect(destinationPath);
+                if (detected != InstallerType.Unknown)
+                {
+                    _isAutoDetecting = true;
+                    _typeCombo.SelectedItem = detected.ToString();
+                    _isAutoDetecting = false;
+                    _statusLabel.Text += $" Tipo detectado: {detected}.";
+                }
+            }
         }
         catch (OperationCanceledException)
         {
