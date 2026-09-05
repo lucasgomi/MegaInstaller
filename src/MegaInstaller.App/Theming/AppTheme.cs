@@ -59,60 +59,23 @@ public static class AppTheme
     /// </summary>
     public static Button CreateDropdownButton(string text, ContextMenuStrip menu, bool primary = false)
     {
-        StyleContextMenu(menu);
         var button = CreateButton($"{text}  ▾", primary);
         button.Click += (_, _) => menu.Show(button, new Point(0, button.Height + 2));
         return button;
     }
 
-    /// <summary>A menu item for a <see cref="CreateDropdownButton"/> menu, themed to match in Modern mode.</summary>
+    /// <summary>
+    /// A menu item for a dropdown/context menu. Deliberately plain - two
+    /// rounds of custom Modern styling here (rounded corners, then just
+    /// color/padding/font) both still read as misaligned, so this now
+    /// renders with WinForms' own untouched default, which is already the
+    /// native Windows look the same way File Explorer's menus are.
+    /// </summary>
     public static ToolStripMenuItem CreateMenuItem(string text, EventHandler handler)
     {
         var item = new ToolStripMenuItem(text);
         item.Click += handler;
-        if (IsModern)
-        {
-            item.ForeColor = ModernPalette.TextPrimary;
-            // The default padding reads as cramped once the menu has its
-            // own rounded corners and border - a bit more room on every
-            // side matches how the rest of the Modern theme breathes.
-            item.Padding = new Padding(10, 6, 14, 6);
-            // Horizontal margin here insets the selection highlight from the
-            // menu's own edges unevenly per item - only vertical breathing
-            // room between stacked items is worth keeping.
-            item.Margin = new Padding(0, 2, 0, 2);
-        }
-
         return item;
-    }
-
-    /// <summary>Styles a dropdown menu to match the Modern palette; no-op in Classic, where native rendering is already correct.</summary>
-    internal static void StyleContextMenu(ContextMenuStrip menu)
-    {
-        if (!IsModern) return;
-
-        menu.Renderer = new ToolStripProfessionalRenderer(new ModernMenuColorTable());
-        menu.ShowImageMargin = false;
-        menu.Font = new Font(menu.Font.FontFamily, 9.5F);
-        // Deliberately no outer menu.Padding and no DWM rounded corners here
-        // (both tried previously): ToolStripDropDownMenu computes its own
-        // padding from ShowImageMargin/the image-margin gutter internally,
-        // so forcing a Padding on top of that fought its layout and read as
-        // crooked/uneven item alignment - a native square popup with just
-        // the color/font polish looks cleaner than fighting that.
-    }
-
-    private sealed class ModernMenuColorTable : ProfessionalColorTable
-    {
-        public override Color MenuItemSelected => ModernPalette.AccentSoft;
-        public override Color MenuItemSelectedGradientBegin => ModernPalette.AccentSoft;
-        public override Color MenuItemSelectedGradientEnd => ModernPalette.AccentSoft;
-        public override Color MenuItemBorder => ModernPalette.Accent;
-        public override Color MenuBorder => ModernPalette.Border;
-        public override Color ToolStripDropDownBackground => ModernPalette.Surface;
-        public override Color ImageMarginGradientBegin => ModernPalette.Surface;
-        public override Color ImageMarginGradientMiddle => ModernPalette.Surface;
-        public override Color ImageMarginGradientEnd => ModernPalette.Surface;
     }
 
     private static Bitmap ScaleIcon(Image source, int size)

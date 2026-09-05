@@ -3,19 +3,20 @@ using MegaInstaller.App.Theming;
 namespace MegaInstaller.App.Dialogs;
 
 /// <summary>
-/// Quick rename for an instance card's right-click menu - just the Name,
-/// with none of "Editar instancia..."'s icon/color/program-membership UI
-/// for when that's overkill for a one-word typo fix.
+/// Quick rename for a context menu's "Renombrar..." entry - just a single
+/// name field, with none of the full editor's other UI, for when that's
+/// overkill for a one-word typo fix. Reused for both instance cards and
+/// individual installer library rows.
 /// </summary>
-public sealed class RenameInstanceForm : Form
+public sealed class RenameForm : Form
 {
     private readonly TextBox _nameBox;
 
     public string NewName => _nameBox.Text.Trim();
 
-    public RenameInstanceForm(string currentName)
+    public RenameForm(string title, string currentName)
     {
-        Text = "Renombrar instancia";
+        Text = title;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;

@@ -51,7 +51,7 @@ public sealed class EditInstallerForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(580, 602);
+        ClientSize = new Size(580, 614);
 
         var layout = new TableLayoutPanel
         {
@@ -75,7 +75,11 @@ public sealed class EditInstallerForm : Form
         // to an earlier, still-unstyled row instead.
         // Rows holding a Dock=Fill button need the button's minimum height
         // plus its margins, or the button overflows its cell and is clipped.
-        int[] rowHeights = { 28, 34, 34, 34, 38, 34, 38, 38, 34, 76, 34, 90, 46 };
+        // The hash-actions row holds AppTheme.CreateButton instances inside a
+        // FlowLayoutPanel, same composition as the bottom Guardar/Cancelar
+        // row - it needs that row's proven 46px, not a plain value row's
+        // 34px, or the buttons get compressed and their text clips.
+        int[] rowHeights = { 28, 34, 46, 34, 38, 34, 38, 38, 34, 76, 34, 90, 46 };
         foreach (var height in rowHeights)
         {
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));

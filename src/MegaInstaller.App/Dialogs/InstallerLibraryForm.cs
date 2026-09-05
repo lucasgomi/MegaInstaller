@@ -147,6 +147,22 @@ public sealed class InstallerLibraryForm : Form
         };
         grid.CellValueChanged += (_, e) => { if (e.RowIndex >= 0) SaveManifest(); };
 
+        var rowMenu = new ContextMenuStrip();
+        rowMenu.Items.Add(AppTheme.CreateMenuItem("Editar...", OnEdit));
+        rowMenu.Items.Add(AppTheme.CreateMenuItem("Renombrar...", OnRenameSelected));
+        rowMenu.Items.Add(AppTheme.CreateMenuItem("Quitar", OnRemove));
+        grid.ContextMenuStrip = rowMenu;
+        // A right-click outside the current (possibly multi-row) selection
+        // selects just that row first, matching Explorer; a right-click
+        // inside an existing selection leaves it alone so "Quitar" can still
+        // act on the whole selection.
+        grid.CellMouseDown += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Right || e.RowIndex < 0 || grid.Rows[e.RowIndex].Selected) return;
+            grid.ClearSelection();
+            grid.Rows[e.RowIndex].Selected = true;
+        };
+
         return grid;
     }
 
@@ -416,6 +432,29 @@ public sealed class InstallerLibraryForm : Form
             row.RefreshAll();
             SaveManifest();
         }
+    }
+
+    private void OnRenameSelected(object? sender, EventArgs e)
+    {
+        var rows = _grid.SelectedRows.Cast<DataGridViewRow>()
+            .Select(r => r.DataBoundItem as InstallerRow)
+            .Where(r => r is not null)
+            .Cast<InstallerRow>()
+            .ToList();
+
+        if (rows.Count != 1)
+        {
+            MessageBox.Show(this, "Selecciona un único programa para renombrar.", "Nada seleccionado",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var renameForm = new RenameForm("Renombrar programa", rows[0].Entry.Name);
+        if (renameForm.ShowDialog(this) != DialogResult.OK) return;
+
+        rows[0].Entry.Name = renameForm.NewName;
+        rows[0].RefreshAll();
+        SaveManifest();
     }
 
     private void OnBulkEdit(object? sender, EventArgs e)

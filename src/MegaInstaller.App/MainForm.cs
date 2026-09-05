@@ -387,7 +387,6 @@ public sealed class MainForm : Form
             cardMenu.Items.Add(AppTheme.CreateMenuItem("Modificar...", OnEditInstance));
             cardMenu.Items.Add(AppTheme.CreateMenuItem("Renombrar...", OnRenameInstance));
             cardMenu.Items.Add(AppTheme.CreateMenuItem("Borrar", OnRemoveInstance));
-            AppTheme.StyleContextMenu(cardMenu);
             // Right-click has to select this card first (MouseDown always
             // precedes the menu's own MouseUp-triggered popup), or the menu
             // would act on whichever card was selected before.
@@ -530,7 +529,7 @@ public sealed class MainForm : Form
             return;
         }
 
-        using var renameForm = new RenameInstanceForm(row.Instance.Name);
+        using var renameForm = new RenameForm("Renombrar instancia", row.Instance.Name);
         if (renameForm.ShowDialog(this) != DialogResult.OK) return;
 
         row.Instance.Name = renameForm.NewName;
