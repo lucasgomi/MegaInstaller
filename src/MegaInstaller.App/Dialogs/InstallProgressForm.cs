@@ -200,7 +200,11 @@ public sealed class InstallProgressForm : Form
 
                     if (result.Outcome == WebDownloadOutcome.Success)
                     {
-                        _resolvedPaths[entry.Id] = result.LocalPath!;
+                        // The override map is keyed by folder (InstallService re-combines
+                        // it with entry.FileName itself) - result.LocalPath is already that
+                        // combined full file path, so storing it here would double it up
+                        // into ".../WebCache/Discord.exe/Discord.exe" and never be found.
+                        _resolvedPaths[entry.Id] = cacheFolder;
                         AppendLog($"[{entry.Name}] Descarga completada.");
                         break;
                     }

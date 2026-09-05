@@ -25,6 +25,8 @@ public sealed class AddWebInstallerForm : Form
 
     private string? _verifiedHash;
     private CancellationTokenSource? _cts;
+    private bool _typeManuallySet;
+    private bool _isAutoDetecting;
 
     public string EntryName => _nameBox.Text.Trim();
     public string MirrorUrl => _urlBox.Text.Trim();
@@ -40,16 +42,22 @@ public sealed class AddWebInstallerForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(520, 330);
+        ClientSize = new Size(520, 340);
 
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(12), ColumnCount = 2, RowCount = 8 };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        int[] rowHeights = { 30, 30, 30, 30, 34, 22, 40, 46 };
-        foreach (var height in rowHeights)
-        {
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
-        }
+        // A Label+TextBox/ComboBox row needs 34px in this app (see
+        // AddFromUrlForm/EditInstallerForm) - anything less clips or
+        // crowds it against the row above/below.
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // Nombre
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // URL del mirror
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // Nombre de archivo
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); // Tipo
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); // Comprobar mirror ahora
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 24)); // progress bar
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));     // status text + pin-hash checkbox
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 46)); // buttons
         Controls.Add(layout);
 
         layout.Controls.Add(new Label { Text = "Nombre:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 0);
@@ -69,6 +77,16 @@ public sealed class AddWebInstallerForm : Form
         _typeCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
         _typeCombo.Items.AddRange(Enum.GetNames<InstallerType>());
         _typeCombo.SelectedItem = InstallerType.Unknown.ToString();
+        // Once the user picks a type themselves, auto-detection from the
+        // URL/file name must stop overwriting it - only a programmatic
+        // change (guarded by _isAutoDetecting) doesn't count as "manual".
+        _typeCombo.SelectedIndexChanged += (_, _) =>
+        {
+            if (!_isAutoDetecting)
+            {
+                _typeManuallySet = true;
+            }
+        };
         layout.Controls.Add(_typeCombo, 1, 3);
 
         layout.Controls.Add(new Label(), 0, 4);
@@ -82,8 +100,10 @@ public sealed class AddWebInstallerForm : Form
         layout.Controls.Add(_progressBar, 1, 5);
 
         layout.Controls.Add(new Label(), 0, 6);
-        var statusPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2 };
-        _statusLabel = new Label { Dock = DockStyle.Fill, AutoSize = false, ForeColor = SystemColors.GrayText };
+        var statusPanel = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, AutoSize = true };
+        statusPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        statusPanel.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        _statusLabel = new Label { AutoSize = true, ForeColor = SystemColors.GrayText, Margin = new Padding(0, 0, 0, 4) };
         _pinHashCheck = new CheckBox { Text = "Fijar el hash comprobado (recomendado)", AutoSize = true, Enabled = false };
         statusPanel.Controls.Add(_statusLabel, 0, 0);
         statusPanel.Controls.Add(_pinHashCheck, 0, 1);
@@ -130,10 +150,18 @@ public sealed class AddWebInstallerForm : Form
         // Detect() is extension-authoritative for package formats and falls
         // back to Unknown for anything it would otherwise need the actual
         // bytes to sniff - exactly right here, since there's no file yet.
+        // Never overrides a type the user picked themselves.
+        if (_typeManuallySet)
+        {
+            return;
+        }
+
         var detected = InstallerTypeDetector.Detect(fileName);
         if (detected != InstallerType.Unknown)
         {
+            _isAutoDetecting = true;
             _typeCombo.SelectedItem = detected.ToString();
+            _isAutoDetecting = false;
         }
     }
 

@@ -11,15 +11,21 @@ internal static class WindowChrome
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int attribute, ref int value, int size);
 
-    public static void ApplyRoundedCorners(Form form)
+    /// <summary>
+    /// Works for any control with its own native window - a top-level
+    /// <see cref="Form"/>, but also a <see cref="ContextMenuStrip"/>'s popup,
+    /// which WinForms renders as a plain square WS_POPUP window with no
+    /// native Windows 11 styling of its own.
+    /// </summary>
+    public static void ApplyRoundedCorners(Control control)
     {
-        if (form.IsHandleCreated)
+        if (control.IsHandleCreated)
         {
-            TrySetRoundedCorners(form.Handle);
+            TrySetRoundedCorners(control.Handle);
         }
         else
         {
-            form.HandleCreated += (_, _) => TrySetRoundedCorners(form.Handle);
+            control.HandleCreated += (_, _) => TrySetRoundedCorners(control.Handle);
         }
     }
 

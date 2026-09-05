@@ -107,7 +107,7 @@ public sealed class MainForm : Form
                 AutoSize = true,
                 Font = titleFont,
                 ForeColor = AppTheme.IsModern ? ModernPalette.TextSecondary : SystemColors.ControlText,
-                Margin = new Padding(6, 0, 6, 0),
+                Margin = new Padding(3, 0, 3, 0),
             });
             titlePanel.Controls.Add(new Label
             {

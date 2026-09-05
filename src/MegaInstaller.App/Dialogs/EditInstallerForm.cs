@@ -42,7 +42,7 @@ public sealed class EditInstallerForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(580, 564);
+        ClientSize = new Size(580, 568);
 
         var layout = new TableLayoutPanel
         {
@@ -54,7 +54,11 @@ public sealed class EditInstallerForm : Form
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
+        // Wide enough for "Calcular y fijar"/"No editable aquí" - the
+        // longest labels this column's button ever shows - without
+        // truncating; the shorter "Sugerir flags"/"..." buttons elsewhere
+        // in this column just get some extra breathing room.
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
         // RowStyles is a plain positional list - RowStyles[i] governs row i
         // regardless of when in the code below it's added, so every row's
         // style must be declared here, upfront, in row order. Adding a
@@ -62,7 +66,7 @@ public sealed class EditInstallerForm : Form
         // to an earlier, still-unstyled row instead.
         // Rows holding a Dock=Fill button need the button's minimum height
         // plus its margins, or the button overflows its cell and is clipped.
-        int[] rowHeights = { 28, 30, 34, 38, 34, 38, 38, 34, 76, 34, 90, 46 };
+        int[] rowHeights = { 28, 34, 34, 38, 34, 38, 38, 34, 76, 34, 90, 46 };
         foreach (var height in rowHeights)
         {
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, height));

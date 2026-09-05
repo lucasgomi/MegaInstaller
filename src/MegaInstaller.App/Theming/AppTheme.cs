@@ -73,6 +73,11 @@ public static class AppTheme
         if (IsModern)
         {
             item.ForeColor = ModernPalette.TextPrimary;
+            // The default padding reads as cramped once the menu has its
+            // own rounded corners and border - a bit more room on every
+            // side matches how the rest of the Modern theme breathes.
+            item.Padding = new Padding(10, 6, 14, 6);
+            item.Margin = new Padding(4, 2, 4, 2);
         }
 
         return item;
@@ -86,6 +91,11 @@ public static class AppTheme
         menu.Renderer = new ToolStripProfessionalRenderer(new ModernMenuColorTable());
         menu.ShowImageMargin = false;
         menu.Font = new Font(menu.Font.FontFamily, 9.5F);
+        menu.Padding = new Padding(4);
+        // Same Windows 11 corner rounding the rest of the Modern theme's
+        // windows get - a ContextMenuStrip's popup otherwise renders as a
+        // plain square WS_POPUP window with no native styling of its own.
+        WindowChrome.ApplyRoundedCorners(menu);
     }
 
     private sealed class ModernMenuColorTable : ProfessionalColorTable
