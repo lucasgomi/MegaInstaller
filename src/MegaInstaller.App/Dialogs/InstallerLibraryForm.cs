@@ -23,6 +23,10 @@ public sealed class InstallerLibraryForm : Form
     private readonly CheckBox _stopOnErrorCheck;
     private readonly CheckBox _elevateCheck;
     private readonly TextBox _searchBox;
+    private readonly ComboBox _sourceFilterCombo;
+    private readonly ComboBox _typeFilterCombo;
+    private readonly ComboBox _adminFilterCombo;
+    private readonly ComboBox _hashFilterCombo;
     private readonly ToolTip _toolTip = new();
 
     public bool ManifestChanged { get; private set; }
@@ -35,13 +39,14 @@ public sealed class InstallerLibraryForm : Form
         FormBorderStyle = FormBorderStyle.FixedSingle;
         MaximizeBox = false;
         StartPosition = FormStartPosition.CenterParent;
-        ClientSize = new Size(1040, 640);
+        ClientSize = new Size(1040, 678);
 
         _manifest = LoadManifest();
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 4 };
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5 };
         // Button rows have to fit the button's whole footprint (height plus
         // its top/bottom margins) or the FlowLayoutPanel clips it at the bottom.
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 38));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
@@ -56,6 +61,44 @@ public sealed class InstallerLibraryForm : Form
         _searchBox.TextChanged += (_, _) => RefreshGrid();
         searchPanel.Controls.Add(_searchBox, 1, 0);
         root.Controls.Add(searchPanel, 0, 0);
+
+        var filterPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, WrapContents = false, Padding = new Padding(8, 4, 8, 4) };
+
+        filterPanel.Controls.Add(new Label { Text = "Fuente:", AutoSize = true, Margin = new Padding(0, 8, 4, 0) });
+        _sourceFilterCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 110, Margin = new Padding(0, 5, 14, 0) };
+        _sourceFilterCombo.Items.AddRange(new object[] { "Todas", "Solo web", "Solo locales" });
+        _sourceFilterCombo.SelectedIndex = 0;
+        _sourceFilterCombo.SelectedIndexChanged += (_, _) => RefreshGrid();
+        filterPanel.Controls.Add(_sourceFilterCombo);
+
+        filterPanel.Controls.Add(new Label { Text = "Tipo:", AutoSize = true, Margin = new Padding(0, 8, 4, 0) });
+        _typeFilterCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130, Margin = new Padding(0, 5, 14, 0) };
+        _typeFilterCombo.Items.Add("Todos los tipos");
+        _typeFilterCombo.Items.AddRange(Enum.GetNames<InstallerType>());
+        _typeFilterCombo.SelectedIndex = 0;
+        _typeFilterCombo.SelectedIndexChanged += (_, _) => RefreshGrid();
+        filterPanel.Controls.Add(_typeFilterCombo);
+
+        filterPanel.Controls.Add(new Label { Text = "Admin:", AutoSize = true, Margin = new Padding(0, 8, 4, 0) });
+        _adminFilterCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 140, Margin = new Padding(0, 5, 14, 0) };
+        _adminFilterCombo.Items.AddRange(new object[] { "Todos", "Solo con admin", "Solo sin admin" });
+        _adminFilterCombo.SelectedIndex = 0;
+        _adminFilterCombo.SelectedIndexChanged += (_, _) => RefreshGrid();
+        filterPanel.Controls.Add(_adminFilterCombo);
+
+        filterPanel.Controls.Add(new Label { Text = "Hash:", AutoSize = true, Margin = new Padding(0, 8, 4, 0) });
+        _hashFilterCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 150, Margin = new Padding(0, 5, 14, 0) };
+        _hashFilterCombo.Items.AddRange(new object[] { "Todos", "Con hash fijado", "Sin hash fijado" });
+        _hashFilterCombo.SelectedIndex = 0;
+        _hashFilterCombo.SelectedIndexChanged += (_, _) => RefreshGrid();
+        filterPanel.Controls.Add(_hashFilterCombo);
+
+        var clearFiltersButton = AppTheme.CreateButton("Limpiar filtros");
+        clearFiltersButton.Margin = new Padding(4, 5, 4, 0);
+        clearFiltersButton.Click += OnClearFilters;
+        filterPanel.Controls.Add(clearFiltersButton);
+
+        root.Controls.Add(filterPanel, 0, 1);
 
         var actionsPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 4, 8, 4) };
 
@@ -72,10 +115,10 @@ public sealed class InstallerLibraryForm : Form
         _toolTip.SetToolTip(bulkEditButton, "Edita a la vez los programas con la casilla marcada en la columna izquierda de la tabla.");
         var removeButton = MakeButton("Quitar", OnRemove);
         actionsPanel.Controls.AddRange(new Control[] { detectButton, editButton, bulkEditButton, removeButton });
-        root.Controls.Add(actionsPanel, 0, 1);
+        root.Controls.Add(actionsPanel, 0, 2);
 
         _grid = BuildGrid();
-        root.Controls.Add(_grid, 0, 2);
+        root.Controls.Add(_grid, 0, 3);
 
         var installPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(8, 6, 8, 6) };
         var installSelectedButton = MakeButton("Instalar seleccionados", OnInstallSelected, primary: true);
@@ -90,7 +133,7 @@ public sealed class InstallerLibraryForm : Form
             Enabled = !ElevationProbe.IsProcessElevated(),
         };
         installPanel.Controls.AddRange(new Control[] { installSelectedButton, installAllButton, _stopOnErrorCheck, _elevateCheck });
-        root.Controls.Add(installPanel, 0, 3);
+        root.Controls.Add(installPanel, 0, 4);
 
         RefreshGrid();
         AppTheme.StyleForm(this);
@@ -200,8 +243,44 @@ public sealed class InstallerLibraryForm : Form
                 TagUtils.MatchesAny(i.Tags, search));
         }
 
+        query = _sourceFilterCombo.SelectedIndex switch
+        {
+            1 => query.Where(i => !string.IsNullOrWhiteSpace(i.MirrorUrl)),
+            2 => query.Where(i => string.IsNullOrWhiteSpace(i.MirrorUrl)),
+            _ => query,
+        };
+
+        if (_typeFilterCombo.SelectedIndex > 0)
+        {
+            var type = Enum.Parse<InstallerType>((string)_typeFilterCombo.Items[_typeFilterCombo.SelectedIndex]!);
+            query = query.Where(i => i.Type == type);
+        }
+
+        query = _adminFilterCombo.SelectedIndex switch
+        {
+            1 => query.Where(i => i.RunAsAdmin),
+            2 => query.Where(i => !i.RunAsAdmin),
+            _ => query,
+        };
+
+        query = _hashFilterCombo.SelectedIndex switch
+        {
+            1 => query.Where(i => !string.IsNullOrWhiteSpace(i.ExpectedSha256)),
+            2 => query.Where(i => string.IsNullOrWhiteSpace(i.ExpectedSha256)),
+            _ => query,
+        };
+
         var rows = new BindingList<InstallerRow>(query.Select(i => new InstallerRow(i, _folder)).ToList());
         _grid.DataSource = rows;
+    }
+
+    private void OnClearFilters(object? sender, EventArgs e)
+    {
+        _searchBox.Clear();
+        _sourceFilterCombo.SelectedIndex = 0;
+        _typeFilterCombo.SelectedIndex = 0;
+        _adminFilterCombo.SelectedIndex = 0;
+        _hashFilterCombo.SelectedIndex = 0;
     }
 
     private IEnumerable<InstallerRow> GridRows => ((BindingList<InstallerRow>?)_grid.DataSource) ?? Enumerable.Empty<InstallerRow>();

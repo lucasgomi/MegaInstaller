@@ -9,7 +9,7 @@ namespace MegaInstaller.Core.Services;
 /// </summary>
 public static class ReleaseInfo
 {
-    public const string CurrentVersion = "v22";
+    public const string CurrentVersion = "v23";
 
     public const string RepoOwner = "lucasgomi";
 
