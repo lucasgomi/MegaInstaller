@@ -1,4 +1,5 @@
 using System.Reflection;
+using MegaInstaller.Core.Services;
 
 namespace MegaInstaller.App;
 
@@ -59,9 +60,7 @@ public static class InstanceIconCatalog
     };
 
     /// <summary>Subfolder (inside the installers folder) where custom-uploaded icons live.</summary>
-    public const string CustomThemeFolderName = "CustomTheme";
-
-    private const string CustomKeyPrefix = "custom:";
+    public const string CustomThemeFolderName = CustomIconPaths.FolderName;
 
     private static readonly Dictionary<string, Image?> Cache = new();
 
@@ -84,10 +83,10 @@ public static class InstanceIconCatalog
     }
 
     /// <summary>Builds the IconKey for a custom icon file already saved under CustomTheme.</summary>
-    public static string CustomKey(string fileName) => CustomKeyPrefix + fileName;
+    public static string CustomKey(string fileName) => CustomIconPaths.BuildKey(fileName);
 
     /// <summary>True when an IconKey refers to a custom-uploaded photo rather than a built-in glyph.</summary>
-    public static bool IsCustomKey(string? key) => key is not null && key.StartsWith(CustomKeyPrefix, StringComparison.Ordinal);
+    public static bool IsCustomKey(string? key) => CustomIconPaths.IsCustomKey(key);
 
     /// <summary>
     /// Resolves an instance's IconKey, which is either a built-in key (see
@@ -103,9 +102,8 @@ public static class InstanceIconCatalog
             return null;
         }
 
-        return key.StartsWith(CustomKeyPrefix, StringComparison.Ordinal)
-            ? LoadCustomIcon(folder, key[CustomKeyPrefix.Length..])
-            : Load(key);
+        var customFileName = CustomIconPaths.FileNameFromKey(key);
+        return customFileName is not null ? LoadCustomIcon(folder, customFileName) : Load(key);
     }
 
     /// <summary>File names (without the "custom:" prefix) of every custom icon already uploaded for this folder.</summary>

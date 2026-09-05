@@ -146,6 +146,15 @@ public sealed class MainForm : Form
         actionsPanel.Controls.Add(MakeDivider());
 
         actionsPanel.Controls.Add(MakeButton("Editor de programas...", OnOpenLibrary));
+
+        actionsPanel.Controls.Add(MakeDivider());
+
+        var exportMenu = new ContextMenuStrip();
+        exportMenu.Items.Add(AppTheme.CreateMenuItem("Exportar instancia seleccionada...", OnExportInstance));
+        exportMenu.Items.Add(AppTheme.CreateMenuItem("Exportar todo...", OnExportAll));
+        exportMenu.Items.Add(AppTheme.CreateMenuItem("Importar...", OnImportPackage));
+        actionsPanel.Controls.Add(AppTheme.CreateDropdownButton("Exportar/Importar", exportMenu));
+
         root.Controls.Add(actionsPanel, 0, 1);
 
         if (AppTheme.IsModern)
@@ -558,5 +567,129 @@ public sealed class MainForm : Form
 
         using var multiForm = new MultiInstallInstancesForm(_folder, _manifest);
         multiForm.ShowDialog(this);
+    }
+
+    private void OnExportInstance(object? sender, EventArgs e)
+    {
+        if (!EnsureFolderSelected()) return;
+
+        var row = SelectedRow();
+        if (row is null)
+        {
+            MessageBox.Show(this, "Selecciona una instancia para exportar.", "Nada seleccionado",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Exportar instancia",
+            Filter = "Paquete de MegaInstaller (*.zip)|*.zip|Todos los archivos (*.*)|*.*",
+            FileName = $"{SanitizeFileName(row.Instance.Name)}.zip",
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            ExportPackageService.ExportInstance(_folder, _manifest, row.Instance, dialog.FileName);
+            MessageBox.Show(this, $"Instancia exportada a:\n{dialog.FileName}", "Exportación completada",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"No se pudo exportar: {ex.Message}", "Error al exportar",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void OnExportAll(object? sender, EventArgs e)
+    {
+        if (!EnsureFolderSelected()) return;
+
+        using var dialog = new SaveFileDialog
+        {
+            Title = "Exportar todo",
+            Filter = "Paquete de MegaInstaller (*.zip)|*.zip|Todos los archivos (*.*)|*.*",
+            FileName = "MegaInstaller-completo.zip",
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        try
+        {
+            ExportPackageService.ExportAll(_folder, _manifest, dialog.FileName);
+            MessageBox.Show(this, $"Todo exportado a:\n{dialog.FileName}", "Exportación completada",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"No se pudo exportar: {ex.Message}", "Error al exportar",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private void OnImportPackage(object? sender, EventArgs e)
+    {
+        if (!EnsureFolderSelected()) return;
+
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Importar paquete de MegaInstaller",
+            Filter = "Paquete de MegaInstaller (*.zip)|*.zip|Todos los archivos (*.*)|*.*",
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+
+        ImportPreview preview;
+        try
+        {
+            preview = ExportPackageService.PreviewImport(dialog.FileName, _folder);
+        }
+        catch (Exception ex) when (ex is InvalidDataException or IOException or System.Text.Json.JsonException)
+        {
+            MessageBox.Show(this, $"No se pudo leer el paquete: {ex.Message}", "Paquete no válido",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+            return;
+        }
+
+        if (preview.NewInstances.Count == 0 && preview.NewInstallers.Count == 0)
+        {
+            MessageBox.Show(this,
+                "No hay nada nuevo que importar: todo lo que trae este paquete ya está en esta carpeta.",
+                "Nada que importar", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var summary = $"Se añadirán {preview.NewInstances.Count} instancia(s) y {preview.NewInstallers.Count} programa(s).";
+        if (preview.SkippedInstances.Count > 0 || preview.SkippedInstallers.Count > 0)
+        {
+            summary += $"\nYa existían y se omitirán: {preview.SkippedInstances.Count} instancia(s), {preview.SkippedInstallers.Count} programa(s).";
+        }
+        if (preview.RenamedFiles.Count > 0)
+        {
+            summary += $"\nSe renombrarán por conflicto de nombre: {string.Join(", ", preview.RenamedFiles)}.";
+        }
+        summary += "\n\n¿Continuar con la importación?";
+
+        var choice = MessageBox.Show(this, summary, "Importar paquete", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (choice != DialogResult.Yes) return;
+
+        try
+        {
+            ExportPackageService.Import(dialog.FileName, _folder);
+            LoadFolder(_folder);
+            MessageBox.Show(this, "Importación completada.", "Importar paquete",
+                MessageBoxButtons.OK, MessageBoxIcon.Information);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"No se pudo importar: {ex.Message}", "Error al importar",
+                MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
+    }
+
+    private static string SanitizeFileName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sanitized = new string(name.Select(c => invalid.Contains(c) ? '_' : c).ToArray()).Trim();
+        return string.IsNullOrWhiteSpace(sanitized) ? "instancia" : sanitized;
     }
 }
